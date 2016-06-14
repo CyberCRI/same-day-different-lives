@@ -43,6 +43,7 @@
   ; Shim
   (aset js/navigator "AudioContext" (or js/window.AudioContext js/window.webkitAudioContext))
   (aset js/navigator "getUserMedia" (or js/navigator.getUserMedia js/navigator.webkitGetUserMedia))
+  
   (let [audio-source (atom nil)
         audio-recorder (atom nil)
         recording-blob (atom nil) 
@@ -53,7 +54,11 @@
         stream (js/navigator.getUserMedia #js { "audio" true } 
                 (fn [stream] 
                   (reset! audio-source (.createMediaStreamSource audio-context stream))
-                  (reset! audio-recorder (js/WebAudioRecorder. @audio-source #js { "workerDir" "js/" }))
+                  (reset! audio-recorder (js/WebAudioRecorder. 
+                                           @audio-source 
+                                           #js { "workerDir" "js/" 
+                                                "numChannels" 1
+                                                "encoding" "ogg"}))
                   (aset @audio-recorder "onEncoderLoaded" (fn [recorder _] (prn  "encoder loaded")))
                   (aset @audio-recorder "onComplete" 
                     (fn [recorder blob] 
@@ -61,8 +66,7 @@
                      (reset! recording-blob blob)
                      (reset! recording-url (js/URL.createObjectURL blob))
                      (prn "got url" @recording-url)))
-                  (aset @audio-recorder "onError" (fn [recorder msg] (prn  "got error" msg)))
-                  (prn "setup recorder" @audio-recorder))
+                  (aset @audio-recorder "onError" (fn [recorder msg] (prn  "got error" msg))))
                 (fn [err] (prn err)))
         start-recording #(.startRecording @audio-recorder)
         stop-recording #(.finishRecording @audio-recorder)
