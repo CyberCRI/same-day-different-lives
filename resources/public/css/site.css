@@ -1,0 +1,87 @@
+.body-container {
+  font-family: 'Helvetica Neue', Verdana, Helvetica, Arial, sans-serif;
+  max-width: 600px;
+  margin: 0 auto;
+  padding-top: 10px;
+  -webkit-font-smoothing: antialiased;
+  font-size: 1.125em;
+  color: #333;
+  line-height: 1.5em;
+}
+
+button, input {
+  font-size: 1.125em;
+}
+
+h1, h2, h3 {
+  color: #000;
+}
+h1 {
+  font-size: 2.5em
+}
+
+h2 {
+  font-size: 2em
+}
+
+h3 {
+  font-size: 1.5em
+}
+
+a {
+  text-decoration: none;
+  color: #09f;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+#weather-container {
+  /* Full screen */
+  position: absolute;
+  top: 0px;
+  left: 0px;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+
+  background-color: lightblue;
+}
+
+.cloud {
+  position: absolute;
+
+  transition-property: transform;
+  transition-duration: 1s;
+  transition-timing-function: linear;
+  color: white;
+
+  width: 390px;
+  height: 250px;
+}
+
+.cloud .phrase {
+  position: absolute;
+  top: 25%;
+  width: 100%;
+  text-align: center;
+}
+
+.cloud .count {
+  position: absolute;
+  top: 50%;
+  width: 100%;
+  text-align: center;
+}
+
+.summary {
+  position: absolute;
+  text-align: center;
+  width: 100%;
+  bottom: 0%;
+}
+
+.error-message {
+  color: red;
+}
