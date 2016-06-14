@@ -48,11 +48,12 @@
   (apply str (repeatedly len #(rand-nth "0123456789abcdefghijklmnopqrstuvwxyz"))))
 
 (defn create-file [request]
-  (let [{{{tempfile :tempfile original-filename :filename} "file"} :params :as params} request
-        extension (last (string/split original-filename (re-pattern "\\.")))
+  (let [{{{tempfile :tempfile content-type :content-type} "file"} :params :as params} request
+        extension (last (string/split content-type (re-pattern "/")))
         new-filename (str (temp-name 20) "." extension)]
-   (io/copy tempfile (io/file (str "uploads/" new-filename)))
-   (response "OK")))
+    (prn "received file " params)
+    (io/copy tempfile (io/file (str "uploads/" new-filename)))
+    (response "OK")))
   
 
 ;;; ROUTES

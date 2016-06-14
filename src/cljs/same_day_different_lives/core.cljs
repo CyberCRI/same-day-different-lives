@@ -12,16 +12,19 @@
 ;; -------------------------
 ;; Views
 
-(defn submit-file [] 
-  ; (POST "/api/files" 
-  ;   {:body (js/document.getElementById "file-form") 
-  ;    :handler #(prn "success" %)
-  ;    :error-handler #(prn "error" %)}))
+(defn submit-photo [] 
   (let [file-input (js/document.getElementById "photo")
         file (aget file-input "files" 0)
         form-data (doto
                     (js/FormData.)
                     (.append "file" file (aget file "name")))]
+  (POST "/api/files" {:body form-data
+                      :error-handler #(prn "error" %)})))
+
+(defn submit-recording [blob] 
+  (let [form-data (doto
+                    (js/FormData.)
+                    (.append "file" blob))]
   (POST "/api/files" {:body form-data
                       :error-handler #(prn "error" %)})))
   
@@ -33,7 +36,7 @@
        [:h3 "Take a photo of your breakfast"]
        [bind-fields [:input {:field :file :id :photo :accept "image/*"}] fields]
        [:p 
-        [:button { :on-click submit-file } "Send" ]]
+        [:button { :on-click submit-photo } "Send" ]]
        ])))
 
 (defn record-page [] 
@@ -42,6 +45,7 @@
   (aset js/navigator "getUserMedia" (or js/navigator.getUserMedia js/navigator.webkitGetUserMedia))
   (let [audio-source (atom nil)
         audio-recorder (atom nil)
+        recording-blob (atom nil) 
         recording-url (atom nil) 
         click-count (atom 0)
         
@@ -52,15 +56,17 @@
                   (reset! audio-recorder (js/WebAudioRecorder. @audio-source #js { "workerDir" "js/" }))
                   (aset @audio-recorder "onEncoderLoaded" (fn [recorder _] (prn  "encoder loaded")))
                   (aset @audio-recorder "onComplete" 
-                        (fn [recorder blob] 
-                         (prn  "got blob" blob)
-                         (reset! recording-url (js/URL.createObjectURL blob))
-                         (prn "got url" @recording-url)))
+                    (fn [recorder blob] 
+                     (prn  "got blob" blob)
+                     (reset! recording-blob blob)
+                     (reset! recording-url (js/URL.createObjectURL blob))
+                     (prn "got url" @recording-url)))
                   (aset @audio-recorder "onError" (fn [recorder msg] (prn  "got error" msg)))
                   (prn "setup recorder" @audio-recorder))
                 (fn [err] (prn err)))
         start-recording #(.startRecording @audio-recorder)
-        stop-recording #(.finishRecording @audio-recorder)]
+        stop-recording #(.finishRecording @audio-recorder)
+        send-recording #(submit-recording @recording-blob)]
     (fn []     
       [:div
        [:h2 "Same Day Different Lives"]
@@ -68,8 +74,12 @@
        [:p
         [:button { :on-click start-recording } "Record"]
         [:button { :on-click stop-recording } "Stop"]]
-       [:p
-        [:audio { :src @recording-url :controls true }]]])))
+       (when @recording-url
+        [:p
+          [:audio { :src @recording-url :controls true }]])
+       (when @recording-url
+        [:p
+          [:button { :on-click send-recording } "Send"]])])))
 
 
 (defn current-page []
