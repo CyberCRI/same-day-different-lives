@@ -31,8 +31,7 @@
    [:meta {:charset "utf-8"}]
    [:meta {:name "viewport"
            :content "width=device-width, initial-scale=1"}]
-   (include-css (if (env :dev) "/css/site.css" "/css/site.min.css"))
-   (include-js "js/WebAudioRecorder.js")])
+   (include-css (if (env :dev) "/css/site.css" "/css/site.min.css"))])
 
 (def loading-page
   (html5
