@@ -31,7 +31,8 @@
    [:meta {:charset "utf-8"}]
    [:meta {:name "viewport"
            :content "width=device-width, initial-scale=1"}]
-   (include-css (if (env :dev) "/css/site.css" "/css/site.min.css"))])
+   (include-css (if (env :dev) "/css/site.css" "/css/site.min.css"))
+   (include-js "js/WebAudioRecorder.js")])
 
 (def loading-page
   (html5
@@ -56,7 +57,7 @@
 
 ;;; ROUTES
 
-(def cljs-urls ["/"])
+(def cljs-urls ["/" "/record"])
 
 (def site-routes (apply routes (for [url cljs-urls] (GET url [] loading-page))))
 
