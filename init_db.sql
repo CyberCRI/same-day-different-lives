@@ -1,14 +1,14 @@
-DROP TYPE IF EXISTS challenge_type;
+DROP TYPE IF EXISTS challenge_type CASCADE;
 CREATE TYPE challenge_type AS ENUM ('image', 'audio');
 
-DROP TABLE IF EXISTS challenges;
+DROP TABLE IF EXISTS challenges CASCADE;
 CREATE TABLE challenges (
 	challenge_id serial primary key,
 	type challenge_type,
 	description text
 );
 INSERT INTO challenges (type, description) VALUES
-	('image', 'Take a photo of your breakfast?'),
+	('image', 'Take a photo of your breakfast'),
 	('image', 'Take a photo of your favorite piece of clothing'),
 	('audio', 'What is the first memory that you have of your parents'),
 	('audio', 'What is worrying you the most right now?'),
@@ -17,16 +17,17 @@ INSERT INTO challenges (type, description) VALUES
 	('audio', 'What was the scariest moment of your life?')
 ;
 
-DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS users CASCADE;
 CREATE TABLE users (
 	user_id serial primary key,
-	email text,
+	pseudo text,
+	email text unique,
 	password text, -- encryted
 	created_at timestamp default current_timestamp
 	-- TODO: demographic information
 );
 
-DROP TABLE IF EXISTS matches;
+DROP TABLE IF EXISTS matches CASCADE;
 CREATE TABLE matches (
 	match_id serial primary key,
 	user_a int references users(user_id),
@@ -34,7 +35,7 @@ CREATE TABLE matches (
 	created_at timestamp default current_timestamp
 );
 
-DROP TABLE IF EXISTS challenge_instances;
+DROP TABLE IF EXISTS challenge_instances CASCADE;
 CREATE TABLE challenge_instances (
 	challenge_instance_id serial primary key,
 	challenge_id int references challenges(challenge_id),
@@ -42,7 +43,7 @@ CREATE TABLE challenge_instances (
 	created_at timestamp default current_timestamp
 );
 
-DROP TABLE IF EXISTS challenge_responses;
+DROP TABLE IF EXISTS challenge_responses CASCADE;
 CREATE TABLE challenge_responses (
 	challenge_response_id serial primary key,
 	challenge_instance_id int references challenge_instances(challenge_instance_id),

@@ -12,7 +12,8 @@
             [clojure.java.jdbc :as jdbc]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.string :as string]))
+            [clojure.string :as string]
+            [clojure.walk :refer [keywordize-keys stringify-keys]]))
 
 (try
   (def db (edn/read-string (slurp "config.clj")))
@@ -43,6 +44,11 @@
 
 ;;; API
 
+(defn make-error-response [msg] {:status 400 :body {:code 400 :error msg}})
+
+; Must be AFTER wrap-json-body to work
+(defn wrap-keywordize [next] (fn [request] (next (keywordize-keys request))))
+
 (defn temp-name [len] 
   (apply str (repeatedly len #(rand-nth "0123456789abcdefghijklmnopqrstuvwxyz"))))
 
@@ -50,11 +56,20 @@
   (let [{{{tempfile :tempfile content-type :content-type} "file"} :params :as params} request
         extension (last (string/split content-type (re-pattern "/")))
         new-filename (str (temp-name 20) "." extension)]
-    (prn "received file " params)
+    ;(prn "received file " params)
     (io/copy tempfile (io/file (str "uploads/" new-filename)))
-    (response "OK")))
+    (response {})))
   
-
+(defn create-user [request]
+  (let [{:keys [pseudo email password]} (:body request)]
+   (if-not (and pseudo email password) 
+     (make-error-response "Pseudo, email, and password are required")
+     ; TODO: encrypt password
+     (do
+      (jdbc/insert! db :users { :pseudo pseudo :email email :password password })
+      (response {})))))
+  
+  
 ;;; ROUTES
 
 (def cljs-urls ["/" "/record"])
@@ -62,7 +77,9 @@
 (def site-routes (apply routes (for [url cljs-urls] (GET url [] loading-page))))
 
 (defroutes api-routes 
-  (POST "/api/files" [] (wrap-params (wrap-multipart-params create-file))))
+  (POST "/api/files" [] (wrap-json-response (wrap-params (wrap-multipart-params create-file))))
+  (POST "/api/users" [] (wrap-json-response (wrap-json-body (wrap-keywordize create-user)))))
+
 
 (defroutes other-routes
   (files "/uploads" {:root "uploads"})
