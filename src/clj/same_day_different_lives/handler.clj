@@ -68,6 +68,17 @@
      (do
       (jdbc/insert! db :users { :pseudo pseudo :email email :password password })
       (response {})))))
+
+(defn login [request]
+  (let [{:keys [email password]} (:body request)]
+   (if-not (and email password) 
+     (make-error-response "Email and password are required")
+     (do 
+       (let [[{:keys [user_id pseudo]}] 
+             (jdbc/query db ["select user_id, pseudo from users
+                              where email = ? and password = ?" email password])]
+         (prn "found user" user_id pseudo)
+         (response {:user_id user_id} ))))))
   
   
 ;;; ROUTES
@@ -78,7 +89,8 @@
 
 (defroutes api-routes 
   (POST "/api/files" [] (wrap-json-response (wrap-params (wrap-multipart-params create-file))))
-  (POST "/api/users" [] (wrap-json-response (wrap-json-body (wrap-keywordize create-user)))))
+  (POST "/api/users" [] (wrap-json-response (wrap-json-body (wrap-keywordize create-user))))
+  (POST "/api/login" [] (wrap-json-response (wrap-json-body (wrap-keywordize login)))))
 
 
 (defroutes other-routes
