@@ -27,6 +27,16 @@
                 (reset! user-model nil)
                 (accountant/navigate! "/"))}))
 
+(defn status []
+  (GET "/api/me" 
+    {:handler (fn [user-info] (reset! user-model (keywordize-keys user-info)))}))
+
+(defn change-state [status]
+  (POST "/api/me" 
+    {:params { :status status } 
+     :format :json 
+     :handler (fn [user-info] (reset! user-model (keywordize-keys user-info)))}))
+
 
 ;; -------------------------
 ;; Views
@@ -68,7 +78,17 @@
    (if @user-model 
      [:div 
       [:p (str "You are logged in as " (:pseudo @user-model))]
-      [:p [:button { :on-click logout } "Logout"]]]
+      [:p [:button { :on-click logout } "Logout"]]
+      (case (:status @user-model) 
+        "dormant" [:div 
+                   [:p "Do you want to play?"]
+                   [:p [:button { :on-click #(change-state "ready") } "Find a match" ]]]
+        "ready"   [:div 
+                   [:p "Waiting for the game to find a match for you"]
+                   [:p [:button { :on-click #(change-state "dormant") } "I don't want to play" ]]]
+        "playing" [:div
+                   [:p "You are playing"]
+                   [:p [:button { :on-click #(change-state "dormant") } "Stop playing" ]]])]
      [:p "You need to " 
       [:a {:href "/login"} "login"]
       " or " 

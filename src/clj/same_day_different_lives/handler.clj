@@ -76,12 +76,13 @@
    (if-not (and email password) 
      (make-error-response "Email and password are required")
      (do 
-       (let [[{:keys [user_id pseudo]}] 
-             (jdbc/query db ["select user_id, pseudo, email from users
+       (let [[{:keys [user_id pseudo email status]}] 
+             (jdbc/query db ["select user_id, pseudo, email, status from users
                               where email = ? and password = ?" email password])]
-         (prn "found user" user_id pseudo email)
-         (-> (response {:user_id user_id} )
-             (assoc :session {:user-id user_id :pseudo pseudo :email email} )))))))
+         (if (nil? user_id) 
+           (make-error-response "Email or password doesn't match")
+           (-> (response {:user_id user_id} )
+               (assoc :session {:user-id user_id :pseudo pseudo :email email :status status} ))))))))
 
 ; Require user in session or return error  
 (defn wrap-require-user [handler]
@@ -91,23 +92,34 @@
       (handler request)
       (make-error-response "Access denied"))))
   
-(defn user-info [{session :session}] 
+(defn get-user-info [{session :session}] 
   (response session))
+ 
+(defn alter-user-info [{:keys [session body]}] 
+  (let [safe-body (select-keys body [:pseudo :status])
+        new-session (merge session safe-body)]
+    (jdbc/execute! db ["update users set pseudo = ?, status = cast(? as user_status) where user_id = ?" 
+                       (:pseudo new-session) (:status new-session) (:user-id session)])
+    (-> (response new-session)
+        (assoc :session new-session))))
  
 (defn logout [request]
   (prn "logout called")
   (-> (response {})
       (assoc :session nil)))
 
-(defn session-check [request]
-  (prn "session-check before" (:session request))
-  (let [session (:session request)
-        count   (:count session 0)
-        session (assoc session :count (inc count))]
-    (prn "session-check after" session)
-    (-> (response (str "You accessed this page " count " times."))
-        (content-type "text/plain")
-        (assoc :session session))))
+; (def get-user-ready [{:keys [body session]}]
+;   (if-let [[{:keys [user_id created_at]}] 
+;         (jdbc/query db ["select user_id, created_at from users
+;                          where user_id = ?" (:user-id session)])]
+;     (response {:ready true})
+;     (response {:ready false})))
+
+; (def set-user-ready [{:keys [body session]}]
+;   (if (:ready body)
+;     (jdbc/insert! db :ready_users { :user_id (:user-id session) })
+;     (jdbc/delete! db :ready_users ["user_id = ?" (:user-id session)]))
+;   (response {:ready (:ready body)}))
 
 
 ;;; ROUTES
@@ -121,9 +133,12 @@
   
   (POST "/api/users" [] (-> create-user wrap-keywordize wrap-json-body wrap-json-response))
 
-  (GET "/api/test" [] (-> session-check wrap-json-body wrap-json-response))
+  (GET "/api/me" [] (-> get-user-info wrap-keywordize wrap-require-user wrap-json-body wrap-json-response))
+  (POST "/api/me" [] (-> alter-user-info wrap-keywordize wrap-require-user wrap-json-body wrap-json-response))
 
-  (GET "/api/me" [] (-> user-info wrap-keywordize wrap-require-user wrap-json-body wrap-json-response))
+  ; (GET "/api/me/ready" [] (-> get-user-ready wrap-keywordize wrap-require-user wrap-json-body wrap-json-response))
+  ; (POST "/api/me/ready" [] (-> set-user-ready wrap-keywordize wrap-require-user wrap-json-body wrap-json-response))
+
   (POST "/api/login" [] (-> login wrap-json-body wrap-json-response))
   (POST "/api/logout" [] (-> logout wrap-keywordize wrap-json-body wrap-json-response wrap-require-user)))
 
