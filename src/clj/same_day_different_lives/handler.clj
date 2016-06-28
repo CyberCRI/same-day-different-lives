@@ -83,7 +83,6 @@
 ; Require user in session or return error  
 (defn wrap-require-user [handler]
   (fn [request]
-    (prn "wrap-require-user session" (:session request))
     (if (-> request :session :user-id)
       (handler request)
       (make-error-response "Access denied"))))
@@ -100,7 +99,6 @@
         (assoc :session new-session))))
  
 (defn logout [request]
-  (prn "logout called")
   (-> (response {})
       (assoc :session nil)))
 
