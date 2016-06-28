@@ -8,7 +8,9 @@
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
             [ring.middleware.json :refer [wrap-json-response wrap-json-body]]
             [ring.middleware.defaults :refer [site-defaults api-defaults wrap-defaults]]
-            [ring.util.response :refer [response]]
+            [ring.middleware.session :refer [wrap-session]]
+            [ring.middleware.session.cookie :refer [cookie-store]]
+            [ring.util.response :refer [response status content-type]]
             [clojure.java.jdbc :as jdbc]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
@@ -70,36 +72,69 @@
       (response {})))))
 
 (defn login [request]
-  (let [{:keys [email password]} (:body request)]
+  (let [{:keys [email password]} (keywordize-keys (:body request))]
    (if-not (and email password) 
      (make-error-response "Email and password are required")
      (do 
        (let [[{:keys [user_id pseudo]}] 
-             (jdbc/query db ["select user_id, pseudo from users
+             (jdbc/query db ["select user_id, pseudo, email from users
                               where email = ? and password = ?" email password])]
-         (prn "found user" user_id pseudo)
-         (response {:user_id user_id} ))))))
+         (prn "found user" user_id pseudo email)
+         (-> (response {:user_id user_id} )
+             (assoc :session {:user-id user_id :pseudo pseudo :email email} )))))))
+
+; Require user in session or return error  
+(defn wrap-require-user [handler]
+  (fn [request]
+    (prn "wrap-require-user session" (:session request))
+    (if (-> request :session :user-id)
+      (handler request)
+      (make-error-response "Access denied"))))
   
-  
+(defn user-info [{session :session}] 
+  (response session))
+ 
+(defn logout [request]
+  (prn "logout called")
+  (-> (response {})
+      (assoc :session nil)))
+
+(defn session-check [request]
+  (prn "session-check before" (:session request))
+  (let [session (:session request)
+        count   (:count session 0)
+        session (assoc session :count (inc count))]
+    (prn "session-check after" session)
+    (-> (response (str "You accessed this page " count " times."))
+        (content-type "text/plain")
+        (assoc :session session))))
+
+
 ;;; ROUTES
 
-(def cljs-urls ["/" "/record"])
+(def cljs-urls ["/" "/record" "/login" "/signup"])
 
 (def site-routes (apply routes (for [url cljs-urls] (GET url [] loading-page))))
 
 (defroutes api-routes 
-  (POST "/api/files" [] (wrap-json-response (wrap-params (wrap-multipart-params create-file))))
-  (POST "/api/users" [] (wrap-json-response (wrap-json-body (wrap-keywordize create-user))))
-  (POST "/api/login" [] (wrap-json-response (wrap-json-body (wrap-keywordize login)))))
+  (POST "/api/files" [] (-> create-file wrap-multipart-params wrap-params wrap-json-response))
+  
+  (POST "/api/users" [] (-> create-user wrap-keywordize wrap-json-body wrap-json-response))
 
+  (GET "/api/test" [] (-> session-check wrap-json-body wrap-json-response))
+
+  (GET "/api/me" [] (-> user-info wrap-keywordize wrap-require-user wrap-json-body wrap-json-response))
+  (POST "/api/login" [] (-> login wrap-json-body wrap-json-response))
+  (POST "/api/logout" [] (-> logout wrap-keywordize wrap-json-body wrap-json-response wrap-require-user)))
 
 (defroutes other-routes
   (files "/uploads" {:root "uploads"})
   (resources "/")
   (not-found "Not Found"))
 
-(def app 
-  (routes
-    (wrap-middleware api-routes api-defaults) ; Not sure why this must go first in the list, but otherwise anti-forgery token required
-    (wrap-middleware site-routes site-defaults)
-    (wrap-middleware other-routes site-defaults)))
+(defroutes all-routes api-routes site-routes other-routes)
+
+
+;;; APP
+
+(def app (wrap-middleware all-routes (assoc-in site-defaults [:security :anti-forgery] false)))

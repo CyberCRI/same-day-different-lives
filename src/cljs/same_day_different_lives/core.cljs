@@ -8,6 +8,25 @@
               [clojure.string :as string]
               [clojure.walk :refer [keywordize-keys stringify-keys]]))
 
+;; -------------------------
+;; Data
+
+(def user-model (atom nil))
+
+
+;; -------------------------
+;; Common functions
+
+(defn check-login []
+  (GET "/api/me" 
+    {:handler (fn [user-info] (reset! user-model (keywordize-keys user-info)))}))
+
+(defn logout []
+  (POST "/api/logout" 
+    {:handler (fn [user-info] 
+                (reset! user-model nil)
+                (accountant/navigate! "/"))}))
+
 
 ;; -------------------------
 ;; Views
@@ -21,7 +40,7 @@
   (POST "/api/files" {:body form-data
                       :error-handler #(prn "error" %)})))
   
-(defn home-page []
+(defn submit-image-page []
   (let [fields (atom {})]
     (fn []
       [:div 
@@ -32,7 +51,7 @@
         [:button { :on-click submit-file } "Send" ]]
        ])))
 
-(defn record-page []
+(defn submit-audio-page []
   (let [fields (atom {})]
     (fn []
       [:div 
@@ -41,6 +60,65 @@
        [bind-fields [:input {:field :file :id :file-input :accept "audio/*"}] fields]
        [:p 
         [:button { :on-click submit-file } "Send" ]]
+       ])))
+
+(defn home-page [] 
+  [:div 
+   [:h2 "Same Day Different Lives"]
+   (if @user-model 
+     [:div 
+      [:p (str "You are logged in as " (:pseudo @user-model))]
+      [:p [:button { :on-click logout } "Logout"]]]
+     [:p "You need to " 
+      [:a {:href "/login"} "login"]
+      " or " 
+      [:a {:href "/signup"} "sign up"]])])
+
+(defn login-page [] 
+  (let [fields (atom {})
+        error-message (atom nil)
+        login (fn [] 
+                (POST "/api/login" 
+                  {:params @fields 
+                   :format :json 
+                   :handler #((check-login) (accountant/navigate! "/"))
+                   :error-handler #(reset! error-message "Could not log in")}))]
+    (fn []
+      [:div 
+       [:h2 "Same Day Different Lives"]
+       [:h3 "Login"]
+       [bind-fields 
+        [:div 
+         [:input {:field :text :id :email}] 
+         [:input {:field :password :id :password}]] 
+        fields]
+       [:p 
+        [:button {:on-click login} "Login"]]
+       [:p.error-message @error-message]
+       ])))
+
+(defn signup-page [] 
+  (let [fields (atom {})
+        error-message (atom nil)
+        signup (fn [] 
+                (POST "/api/users" 
+                  {:params @fields 
+                   :format :json 
+                   :handler #(accountant/navigate! "/login")
+                   :error-handler #(reset! error-message "Could not sign up")}))]
+    (fn []
+      [:div 
+       [:h2 "Same Day Different Lives"]
+       [:h3 "Sign up"]
+       [bind-fields 
+        [:div 
+         [:p "Email " [:input {:field :text :id :email}]] 
+         [:p "Pseudoname " [:input {:field :text :id :pseudo}]] 
+         [:p "Password " [:input {:field :password :id :password}]]] 
+        fields]
+       [:p 
+        [:button {:on-click signup} "Sign up"]]
+       [:p.error-message @error-message]
        ])))
 
 (defn current-page []
@@ -53,8 +131,18 @@
 (secretary/defroute "/" []
   (session/put! :current-page #'home-page))
 
+(secretary/defroute "/login" []
+  (session/put! :current-page #'login-page))
+
+(secretary/defroute "/signup" []
+  (session/put! :current-page #'signup-page))
+
 (secretary/defroute "/record" []
-  (session/put! :current-page #'record-page))
+  (session/put! :current-page #'submit-audio-page))
+
+(secretary/defroute "/audio" []
+  (session/put! :current-page #'submit-image-page))
+
 
 
 ;; -------------------------
@@ -72,4 +160,5 @@
      (fn [path]
        (secretary/locate-route path))})
   (accountant/dispatch-current!)
+  (check-login)
   (mount-root))
