@@ -14,5 +14,5 @@ pom.xml.asc
 *.log
 /.env
 .DS_Store
-config.clj
+config.edn
 /uploads

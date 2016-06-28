@@ -17,11 +17,7 @@
             [clojure.string :as string]
             [clojure.walk :refer [keywordize-keys stringify-keys]]))
 
-(try
-  (def db (edn/read-string (slurp "config.clj")))
-  (catch Exception e
-    (prn "Can't load config file 'config.clj'. Quitting...")
-    (System/exit 1)))
+(def db (:db env))
 
 
 ;;; WEBSITE
@@ -107,19 +103,6 @@
   (prn "logout called")
   (-> (response {})
       (assoc :session nil)))
-
-; (def get-user-ready [{:keys [body session]}]
-;   (if-let [[{:keys [user_id created_at]}] 
-;         (jdbc/query db ["select user_id, created_at from users
-;                          where user_id = ?" (:user-id session)])]
-;     (response {:ready true})
-;     (response {:ready false})))
-
-; (def set-user-ready [{:keys [body session]}]
-;   (if (:ready body)
-;     (jdbc/insert! db :ready_users { :user_id (:user-id session) })
-;     (jdbc/delete! db :ready_users ["user_id = ?" (:user-id session)]))
-;   (response {:ready (:ready body)}))
 
 
 ;;; ROUTES
