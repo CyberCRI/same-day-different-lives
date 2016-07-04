@@ -15,9 +15,10 @@
             [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as string]
-            [clojure.walk :refer [keywordize-keys stringify-keys]]))
+            [clojure.walk :refer [keywordize-keys stringify-keys]]
+            [crypto.password.pbkdf2 :as password]))
 
-(def db (:db env))
+(def db (merge (:db env) { :stringtype "unspecified" }))
 
 
 ;;; WEBSITE
@@ -64,7 +65,7 @@
      (make-error-response "Pseudo, email, and password are required")
      ; TODO: encrypt password
      (do
-      (jdbc/insert! db :users { :pseudo pseudo :email email :password password })
+      (jdbc/insert! db :users { :pseudo pseudo :email email :password (password/encrypt password) })
       (response {})))))
 
 (defn login [request]
@@ -72,10 +73,10 @@
    (if-not (and email password) 
      (make-error-response "Email and password are required")
      (do 
-       (let [[{:keys [user_id pseudo email status]}] 
-             (jdbc/query db ["select user_id, pseudo, email, status from users
-                              where email = ? and password = ?" email password])]
-         (if (nil? user_id) 
+       (let [[{:keys [user_id pseudo email password-hash status]}] 
+             (jdbc/query db ["select user_id, pseudo, email, password as \"password-hash\", status from users
+                              where email = ?" email])]
+         (if (or (nil? user_id) (not (password/check password password-hash)))
            (make-error-response "Email or password doesn't match")
            (-> (response {:user_id user_id} )
                (assoc :session {:user-id user_id :pseudo pseudo :email email :status status} ))))))))

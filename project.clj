@@ -23,7 +23,9 @@
                  [ring/ring-json "0.4.0"]
                  [cljs-ajax "0.5.5"]
                  [org.clojure/java.jdbc "0.6.1"]
-                 [org.postgresql/postgresql "9.4.1208"]]
+                 [org.postgresql/postgresql "9.4.1208"]
+                 [clj-time "0.12.0"]
+                 [crypto-password "0.2.0"]]
 
   :plugins [[lein-environ "1.0.2"]
             [lein-cljsbuild "1.1.1"]

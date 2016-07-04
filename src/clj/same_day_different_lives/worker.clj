@@ -1,9 +1,12 @@
 (ns same-day-different-lives.worker
   (:require [clojure.core.async :refer [<! timeout chan go]]
             [config.core :refer [env]]
-            [clojure.java.jdbc :as jdbc]))
+            [clojure.java.jdbc :as jdbc]
+            [clj-time.jdbc]
+            [clj-time.core :as t]
+            [clj-time.coerce :as tc]))
 
-(def db (:db env))
+(def db (merge (:db env) { :stringtype "unspecified" }))
 
 (defn pair-users []
   "Makes pairs of users"
@@ -20,14 +23,16 @@
     (doseq [[user-a user-b] user-pairs]
       (prn "making match for users" user-a user-b "challenges" selected-challenges)
       ; Make match
-      (let [[{match-id :match_id}] (jdbc/insert! db :matches { :user_a user-a :user_b user-b })]
+      (let [[{match-id :match_id}] 
+            (jdbc/insert! db :matches { :user_a user-a :user_b user-b
+                                        :starts_at (t/now)
+                                        :ends_at (t/plus (t/now) (t/days 7)) })]
         ; Setup challenges
         (doseq [challenge selected-challenges]
           (jdbc/insert! db :challenge_instances { :challenge_id challenge :match_id match-id })))
 
       ; Change user statuses
-      (jdbc/execute! db ["update users set status = 'playing' where user_id in (?, ?)" user-a user-b]))))
-
+      (jdbc/update! db :users { :status "playing" } ["user_id in (?, ?)" user-a user-b]))))
 
 (defn run-worker [] 
   (prn "worker started") 

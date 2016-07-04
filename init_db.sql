@@ -25,7 +25,7 @@ CREATE TABLE users (
 	user_id serial primary key,
 	pseudo text,
 	email text unique,
-	password text, -- encryted
+	password text, -- encrypted
 	status user_status default 'dormant',
 	created_at timestamp default current_timestamp
 	-- TODO: demographic information
@@ -37,7 +37,9 @@ CREATE TABLE matches (
 	user_a int references users(user_id),
 	user_b int references users(user_id),
 	created_at timestamp default current_timestamp,
-	ended_at timestamp
+	starts_at timestamp,
+	ends_at timestamp,
+	running boolean default TRUE
 );
 
 DROP TABLE IF EXISTS challenge_instances CASCADE;
@@ -45,7 +47,9 @@ CREATE TABLE challenge_instances (
 	challenge_instance_id serial primary key,
 	challenge_id int references challenges(challenge_id),
 	match_id int references matches(match_id),
-	created_at timestamp default current_timestamp
+	created_at timestamp default current_timestamp,
+	starts_at timestamp,
+	ends_at timestamp
 );
 
 DROP TABLE IF EXISTS challenge_responses CASCADE;
