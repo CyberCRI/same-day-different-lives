@@ -8,6 +8,19 @@
 
 (def db (merge (:db env) { :stringtype "unspecified" }))
 
+; Taken from https://github.com/mikera/clojure-utils/blob/master/src/main/clojure/mikera/cljutils/loops.clj
+; Licensed under LGPL 3
+(defmacro doseq-indexed 
+  "loops over a set of values, binding index-sym to the 0-based index of each value"
+  ([[val-sym values index-sym] & code]
+  `(loop [vals# (seq ~values) 
+          ~index-sym (long 0)]
+     (if vals#
+       (let [~val-sym (first vals#)]
+             ~@code
+             (recur (next vals#) (inc ~index-sym)))
+       nil))))
+
 (defn pair-users []
   "Makes pairs of users"
   ; TODO try to find people who haven't been together
@@ -28,8 +41,10 @@
                                         :starts_at (t/now)
                                         :ends_at (t/plus (t/now) (t/days 7)) })]
         ; Setup challenges
-        (doseq [challenge selected-challenges]
-          (jdbc/insert! db :challenge_instances { :challenge_id challenge :match_id match-id })))
+        (doseq-indexed [challenge selected-challenges offset]
+          (jdbc/insert! db :challenge_instances {:challenge_id challenge :match_id match-id
+                                                 :starts_at (t/plus (t/now) (t/days offset))
+                                                 :ends_at (t/plus (t/now) (t/days (inc offset)))})))
 
       ; Change user statuses
       (jdbc/update! db :users { :status "playing" } ["user_id in (?, ?)" user-a user-b]))))
