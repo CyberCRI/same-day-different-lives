@@ -91,6 +91,7 @@
 (defn get-user-info [{session :session}] 
   (response session))
  
+; TODO: when user withdraws active game, destroy/decativate remaining challenges
 (defn alter-user-info [{:keys [session body]}] 
   (let [safe-body (select-keys body [:pseudo :status])
         new-session (merge session safe-body)]
@@ -103,10 +104,49 @@
   (-> (response {})
       (assoc :session nil)))
 
+(defn get-active-match-for-user [user-id]
+  (let [[{:keys [match_id]}]
+        (jdbc/query db ["select match_id 
+                        from matches 
+                        where starts_at < now() and ends_at > now() 
+                          and (user_a = ? or user_b = ?)"
+                        user-id user-id])]
+        {:match-id match_id}))
+
+(defn obtain-active-match [{session :session}]
+  (response (get-active-match-for-user (:user-id session))))  
+
+
+(defn get-active-challenge-for-user [user-id]
+  (let [[{:keys [challenge_instance_id type description]}]
+        (jdbc/query db ["select challenge_instance_id, type, description 
+                        from challenge_instances, challenges, matches 
+                        where challenge_instances.starts_at < now() and challenge_instances.ends_at > now() 
+                          and challenges.challenge_id = challenge_instances.challenge_id
+                          and challenge_instances.match_id = matches.match_id
+                          and (matches.user_a = ? or matches.user_b = ?)"
+                        user-id user-id])]
+        {:challenge-instance-id challenge_instance_id :type type :description description}))
+
+(defn get-challenge-responses [challenge-instance-id]
+  (let [responses (jdbc/query db ["select user_id, filename, mime_type, created_at 
+                                  from challenge_responses 
+                                  where challenge_instance_id = ?"
+                                  challenge-instance-id])]
+    (for [[{:keys [user_id filename mime_type created_at]}] responses]
+      {:user-id user_id :filename filename :mime-type mime_type :created-at created_at})))
+
+(defn obtain-active-challenge [{session :session}]
+  (response (get-active-challenge-for-user (:user-id session))))  
+
+(defn obtain-challenge-responses [{params :params session :session}]
+  ; TODO: check that the user is allowed to see this match
+  (response (get-challenge-responses (:challenge-instance-id params))))  
+
 
 ;;; ROUTES
 
-(def cljs-urls ["/" "/record" "/login" "/signup"])
+(def cljs-urls ["/" "/record" "/login" "/signup" "/match/:match-id"])
 
 (def site-routes (apply routes (for [url cljs-urls] (GET url [] loading-page))))
 
@@ -118,8 +158,9 @@
   (GET "/api/me" [] (-> get-user-info wrap-keywordize wrap-require-user wrap-json-body wrap-json-response))
   (POST "/api/me" [] (-> alter-user-info wrap-keywordize wrap-require-user wrap-json-body wrap-json-response))
 
-  ; (GET "/api/me/ready" [] (-> get-user-ready wrap-keywordize wrap-require-user wrap-json-body wrap-json-response))
-  ; (POST "/api/me/ready" [] (-> set-user-ready wrap-keywordize wrap-require-user wrap-json-body wrap-json-response))
+  (GET "/api/me/match" [] (-> obtain-active-match wrap-require-user wrap-json-body wrap-json-response))
+  (GET "/api/me/challenge" [] (-> obtain-active-challenge wrap-require-user wrap-json-body wrap-json-response))
+  (GET "/api/challenge-response/:challenge-instance-id" [] (-> obtain-challenge-responses wrap-require-user wrap-json-body wrap-json-response))
 
   (POST "/api/login" [] (-> login wrap-json-body wrap-json-response))
   (POST "/api/logout" [] (-> logout wrap-keywordize wrap-json-body wrap-json-response wrap-require-user)))

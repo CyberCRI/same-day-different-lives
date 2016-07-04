@@ -37,6 +37,14 @@
      :format :json 
      :handler (fn [user-info] (reset! user-model (keywordize-keys user-info)))}))
 
+(defn get-active-challenge [challenge-model]
+  (GET "/api/me/challenge" 
+    {:handler (fn [challenge] (reset! challenge-model (keywordize-keys challenge)))}))
+
+(defn get-active-match [match-model]
+  (GET "/api/me/match" 
+    {:handler (fn [match] (reset! match-model (keywordize-keys match)))}))
+
 
 ;; -------------------------
 ;; Views
@@ -73,26 +81,32 @@
        ])))
 
 (defn home-page [] 
-  [:div 
-   [:h2 "Same Day Different Lives"]
-   (if @user-model 
-     [:div 
-      [:p (str "You are logged in as " (:pseudo @user-model))]
-      [:p [:button { :on-click logout } "Logout"]]
-      (case (:status @user-model) 
-        "dormant" [:div 
-                   [:p "Do you want to play?"]
-                   [:p [:button { :on-click #(change-state "ready") } "Find a match" ]]]
-        "ready"   [:div 
-                   [:p "Waiting for the game to find a match for you"]
-                   [:p [:button { :on-click #(change-state "dormant") } "I don't want to play" ]]]
-        "playing" [:div
-                   [:p "You are playing"]
-                   [:p [:button { :on-click #(change-state "dormant") } "Stop playing" ]]])]
-     [:p "You need to " 
-      [:a {:href "/login"} "login"]
-      " or " 
-      [:a {:href "/signup"} "sign up"]])])
+  (let [match-model (atom nil)]
+    (get-active-match match-model)
+    (fn [] 
+      [:div 
+       [:h2 "Same Day Different Lives"]
+       (if @user-model 
+         [:div 
+          [:p (str "You are logged in as " (:pseudo @user-model))]
+          [:p [:button { :on-click logout } "Logout"]]
+          (case (:status @user-model) 
+            "dormant" [:div 
+                       [:p "Do you want to play?"]
+                       [:p [:button { :on-click #(change-state "ready") } "Find a match" ]]]
+            "ready"   [:div 
+                       [:p "Waiting for the game to find a match for you"]
+                       [:p [:button { :on-click #(change-state "dormant") } "I don't want to play" ]]]
+            "playing" [:div
+                       [:p "You are playing"]
+                       (when @match-model 
+                         [:p 
+                          [:a {:href "/match"} "See your current conversation"]])
+                       [:p [:button { :on-click #(change-state "dormant") } "Stop playing" ]]])]
+         [:p "You need to " 
+          [:a {:href "/login"} "login"]
+          " or " 
+          [:a {:href "/signup"} "sign up"]])])))
 
 (defn login-page [] 
   (let [fields (atom {})
@@ -141,8 +155,20 @@
        [:p.error-message @error-message]
        ])))
 
+; TODO: have access to match by ID
+(defn match-page [match-id]
+  (let [challenge-model (atom nil)]
+    (get-active-challenge challenge-model)
+    (fn [] 
+      [:div 
+       [:h2 "Same Day Different Lives"]
+       [:h3 (str "Match " match-id)]])))
+       
 (defn current-page []
-  [:div [(session/get :current-page)]])
+  (let [page (session/get :current-page)]  
+    (if (vector? page)
+      [:div page]      
+      [:div [page]])))
 
 
 ;; -------------------------
@@ -156,6 +182,10 @@
 
 (secretary/defroute "/signup" []
   (session/put! :current-page #'signup-page))
+
+(secretary/defroute "/match/:match-id" [match-id]
+  (prn "match-id" match-id)
+  (session/put! :current-page [#'match-page match-id]))
 
 (secretary/defroute "/record" []
   (session/put! :current-page #'submit-audio-page))
