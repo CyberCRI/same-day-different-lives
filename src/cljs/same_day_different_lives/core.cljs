@@ -45,6 +45,14 @@
   (GET "/api/me/match" 
     {:handler (fn [match] (reset! match-model (keywordize-keys match)))}))
 
+(defn get-match-model [match-id match-model]
+  (GET (str "/api/match/" match-id) 
+    {:handler (fn [match] (reset! match-model (keywordize-keys match)))}))
+ 
+ 
+ (defn find-first-other [col value]
+   ; Returns the first item in col that is not equal to val
+   (first (filter #(not= % value) col))) 
 
 ;; -------------------------
 ;; Views
@@ -101,7 +109,7 @@
                        [:p "You are playing"]
                        (when @match-model 
                          [:p 
-                          [:a {:href "/match"} "See your current conversation"]])
+                          [:a {:href (str "/match/" (:match-id @match-model))} "See your current conversation"]])
                        [:p [:button { :on-click #(change-state "dormant") } "Stop playing" ]]])]
          [:p "You need to " 
           [:a {:href "/login"} "login"]
@@ -155,14 +163,31 @@
        [:p.error-message @error-message]
        ])))
 
-; TODO: have access to match by ID
+(defn to-ms [date-string] (.getTime (new js/Date date-string)))
+
+(defn active? [challenge]
+  (let [{:keys [starts-at ends-at]} challenge]
+    (and 
+      (< (to-ms starts-at) (js/Date.now))
+      (> (to-ms ends-at) (js/Date.now)))))
+
 (defn match-page [match-id]
-  (let [challenge-model (atom nil)]
-    (get-active-challenge challenge-model)
-    (fn [] 
-      [:div 
-       [:h2 "Same Day Different Lives"]
-       [:h3 (str "Match " match-id)]])))
+  (let [match-model (atom nil)]
+    (get-match-model match-id match-model)
+    (fn []
+      (let [{:keys [match challenges]} @match-model
+            other-pseudo (find-first-other [(:user-a match) (:user-b match)] 
+                                           (:pseudo @user-model))
+            showable-challenges (filter #(< (to-ms (:starts-at %)) (js/Date.now)) challenges)] 
+        [:div 
+         [:h2 "Same Day Different Lives"]
+         [:h3 (str "Conversation with " other-pseudo)]
+         [:p (if (:running match) "Going now" "Already over")]
+         (for [challenge showable-challenges]
+           [:div.challenge {:class (if (active? challenge) "active-challenge")}
+            [:p (str "Challenge " (:challenge-instance-id challenge))
+             [:p (str "Starts at " (:starts-at challenge))]]])]))))
+       
        
 (defn current-page []
   (let [page (session/get :current-page)]  

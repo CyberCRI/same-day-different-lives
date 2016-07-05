@@ -16,7 +16,10 @@
             [clojure.java.io :as io]
             [clojure.string :as string]
             [clojure.walk :refer [keywordize-keys stringify-keys]]
-            [crypto.password.pbkdf2 :as password]))
+            [crypto.password.pbkdf2 :as password]
+            [clj-time.jdbc]
+            [clj-time.core :as t]
+            [clj-time.coerce :as tc]))
 
 (def db (merge (:db env) { :stringtype "unspecified" }))
 
@@ -136,13 +139,51 @@
     (for [[{:keys [user_id filename mime_type created_at]}] responses]
       {:user-id user_id :filename filename :mime-type mime_type :created-at created_at})))
 
+(defn get-challenges-in-match [match-id]
+  (let [challenges (jdbc/query db ["select challenge_instance_id, type, description, challenge_instances.starts_at, challenge_instances.ends_at
+                                    from challenge_instances, challenges 
+                                    where challenges.challenge_id = challenge_instances.challenge_id
+                                      and challenge_instances.match_id = ?
+                                    order by challenge_instances.starts_at desc"
+                                    match-id]
+                               {:row-fn (fn [{:keys [challenge_instance_id type description starts_at ends_at]}]
+                                         {:challenge-instance-id challenge_instance_id 
+                                          :type type 
+                                          :description description 
+                                          :starts-at (.toString starts_at) 
+                                          :ends-at (.toString ends_at)})})]
+    ; For each challenge, associate any responses
+    (for [challenge challenges]
+      (assoc challenge :responses (get-challenge-responses (:challenge_instance_id challenge))))))
+
+(defn get-user-pseudo [user-id]
+  (first (jdbc/query db ["select pseudo from users where user_id = ?" user-id]
+    {:row-fn :pseudo})))
+
+(defn get-match-info [match-id]
+  (let [match (first (jdbc/query db ["select user_a, user_b, created_at, starts_at, ends_at, running 
+                                      from matches
+                                      where match_id = ?"
+                              match-id]
+                          {:row-fn (fn [{:keys [user_a user_b created_at starts_at ends_at running]}]
+                                         {:user-a user_a 
+                                          :user-b user_b 
+                                          :created-at (.toString created_at) 
+                                          :starts-at (.toString starts_at) 
+                                          :ends-at (.toString ends_at)
+                                          :running running})}))
+        pseudo-a (get-user-pseudo (:user-a match))
+        pseudo-b (get-user-pseudo (:user-b match))]
+    (assoc match :user-a pseudo-a :user-b pseudo-b)))
+                          
+                          
 (defn obtain-active-challenge [{session :session}]
   (response (get-active-challenge-for-user (:user-id session))))  
 
-(defn obtain-challenge-responses [{params :params session :session}]
-  ; TODO: check that the user is allowed to see this match
-  (response (get-challenge-responses (:challenge-instance-id params))))  
-
+(defn obtain-match-history [{:keys [session params]}]
+  ; TODO: check that you have the right to access this match
+  (response {:challenges (get-challenges-in-match (:match-id params))
+             :match (get-match-info (:match-id params))}))
 
 ;;; ROUTES
 
@@ -159,8 +200,7 @@
   (POST "/api/me" [] (-> alter-user-info wrap-keywordize wrap-require-user wrap-json-body wrap-json-response))
 
   (GET "/api/me/match" [] (-> obtain-active-match wrap-require-user wrap-json-body wrap-json-response))
-  (GET "/api/me/challenge" [] (-> obtain-active-challenge wrap-require-user wrap-json-body wrap-json-response))
-  (GET "/api/challenge-response/:challenge-instance-id" [] (-> obtain-challenge-responses wrap-require-user wrap-json-body wrap-json-response))
+  (GET "/api/match/:match-id" [] (-> obtain-match-history wrap-require-user wrap-json-body wrap-json-response))
 
   (POST "/api/login" [] (-> login wrap-json-body wrap-json-response))
   (POST "/api/logout" [] (-> logout wrap-keywordize wrap-json-body wrap-json-response wrap-require-user)))
