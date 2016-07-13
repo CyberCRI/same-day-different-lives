@@ -131,13 +131,18 @@
        [:h2 "Same Day Different Lives"]
        [:h3 "Login"]
        [bind-fields 
-        [:div 
-         [:input {:field :text :id :email}] 
-         [:input {:field :password :id :password}]] 
+        [:div.row
+         [:div.six.columns
+          [:label {:for "email"} "Email"] 
+          [:input.u-full-width {:field :text :id :email}]] 
+         [:div.six.columns
+          [:label {:for "password"} "Password"] 
+          [:input.u-full-width {:field :password :id :password}]]]
         fields]
-       [:p 
-        [:button {:on-click login} "Login"]]
-       [:p.error-message @error-message]
+       [:div.row 
+        [:button.button-primary {:on-click login} "Login"]]
+       [:div.row 
+        [:p.error-message @error-message]]
        ])))
 
 (defn signup-page [] 
@@ -201,7 +206,7 @@
                [:div {:class "ten columns"}
                 (if (= "image" (:type challenge))
                   [:img.response-image {:src (str "/uploads/" (:filename response))}]
-                  [:audio {:controls true :src (str "/uploads/" (:filename response))}])]])])
+                  [:audio.response-image {:controls true :src (str "/uploads/" (:filename response))}])]])])
          [:div.row.section 
           [:h4 (str "Plus " (count upcoming-challenges) " more challenges to come...")]]]))))
        
