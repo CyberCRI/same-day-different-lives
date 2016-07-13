@@ -54,3 +54,7 @@ div {
 .active-challenge {
   background-color: yellow;
 }
+
+.response-image {
+  max-width: 100%;
+}

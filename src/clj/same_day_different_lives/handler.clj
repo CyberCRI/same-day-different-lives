@@ -133,13 +133,16 @@
         {:challenge-instance-id challenge_instance_id :type type :description description}))
 
 (defn get-challenge-responses [challenge-instance-id]
-  (let [responses (jdbc/query db ["select users.pseudo, challenge_responses.filename, challenge_responses.mime_type, challenge_responses.created_at 
-                                  from challenge_responses, users 
-                                  where challenge_responses.user_id = users.user_id
-                                    and challenge_instance_id = ?"
-                                  challenge-instance-id])]
-    (for [[{:keys [pseudo filename mime_type created_at]}] responses]
-      {:user pseudo :filename filename :mime-type mime_type :created-at created_at})))
+  (jdbc/query db ["select users.pseudo, challenge_responses.filename, challenge_responses.mime_type, challenge_responses.created_at 
+                  from challenge_responses, users 
+                  where challenge_responses.user_id = users.user_id
+                    and challenge_instance_id = ?"
+                  challenge-instance-id]
+              {:row-fn (fn [{:keys [pseudo filename mime_type created_at]}]
+                        {:user pseudo 
+                         :filename filename 
+                         :mime-type mime_type 
+                         :created-at (.toString created_at)})}))
 
 (defn get-challenges-in-match [match-id]
   (let [challenges (jdbc/query db ["select challenge_instance_id, type, description, challenge_instances.starts_at, challenge_instances.ends_at
@@ -156,7 +159,7 @@
                                           :ends-at (.toString ends_at)})})]
     ; For each challenge, associate any responses
     (for [challenge challenges]
-      (assoc challenge :responses (get-challenge-responses (:challenge_instance_id challenge))))))
+      (assoc challenge :responses (get-challenge-responses (:challenge-instance-id challenge))))))
 
 (defn get-challenge-instance [challenge-instance-id]
   (first (jdbc/query db ["select challenge_instances.challenge_instance_id, challenges.challenge_id, challenges.type, challenges.description, challenge_instances.starts_at, challenge_instances.ends_at

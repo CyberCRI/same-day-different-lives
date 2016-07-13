@@ -196,7 +196,7 @@
 
 (defn responded-to-challenge? [challenge]
   (let [responses (:responses challenge)]
-    (empty? (filter #(= (:user %) (:pseudo @user-model)) responses))))
+    (not-empty (filter #(= (:user %) (:pseudo @user-model)) responses))))
 
 (defn match-page [match-id]
   (let [match-model (atom nil)]
@@ -212,9 +212,14 @@
          [:p (if (:running match) "Going now" "Already over")]
          (for [challenge showable-challenges]
            [:div.challenge {:class (if (active? challenge) "active-challenge")}
-            [:p (str "Challenge " (:challenge-instance-id challenge))]
-            (when (and (responded-to-challenge? challenge) (active? challenge))
-              [:a {:href (str "/match/" match-id "/respond/" (:challenge-instance-id challenge))} "Answer now!"])])]))))
+            [:p "Challenge: " [:em (:description challenge)]]
+            (when (and (not (responded-to-challenge? challenge)) (active? challenge))
+              [:a {:href (str "/match/" match-id "/respond/" (:challenge-instance-id challenge))} "Answer now!"])
+            (for [response (:responses challenge)]
+              [:div 
+               [:p (str (:user response) ":")]
+               (if (= "image" (:type challenge))
+                 [:img.response-image {:src (str "/uploads/" (:filename response))}])])])]))))
        
        
 (defn current-page []
