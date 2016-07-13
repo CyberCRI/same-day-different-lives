@@ -225,7 +225,7 @@
 
 ;;; ROUTES
 
-(def cljs-urls ["/" "/record" "/login" "/signup" "/match/:match-id" "/respond/:challenge-instance-id"])
+(def cljs-urls ["/" "/record" "/login" "/signup" "/match/:match-id" "/match/:match-id/respond/:challenge-instance-id"])
 
 (def site-routes (apply routes (for [url cljs-urls] (GET url [] loading-page))))
 

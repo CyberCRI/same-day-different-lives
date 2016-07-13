@@ -44,7 +44,6 @@
 (defn get-active-match [match-model]
   (GET "/api/me/match" 
     {:handler (fn [match] 
-                (prn "match is " match)
                 (let [match-keys (keywordize-keys match)]
                   (reset! match-model (if (:match-id match-keys) match-keys nil))))}))
 
@@ -61,7 +60,7 @@
  ; Returns the first item in col that is not equal to val
  (first (filter #(not= % value) col))) 
 
-(defn submit-file [challenge-instance-id] 
+(defn submit-file [match-id challenge-instance-id] 
   (let [file-input (js/document.getElementById "file-input")
         file (aget file-input "files" 0)
         form-data (doto
@@ -69,13 +68,14 @@
                     (.append "file" file (aget file "name")))]
   (POST (str "/api/challenge-instance/" challenge-instance-id) 
     {:body form-data
-     :error-handler #(prn "error uploading")})))
+     :error-handler #(prn "error uploading")
+     :handler #(accountant/navigate! (str "/match/" match-id))})))
 
 
 ;; -------------------------
 ;; Views
 
-(defn respond-page [challenge-instance-id]
+(defn respond-page [match-id challenge-instance-id]
   (let [challenge-instance-model (atom nil)]
     (get-challenge-instance challenge-instance-id challenge-instance-model)
     (fn []
@@ -87,7 +87,7 @@
                  :id :file-input 
                  :accept (str (:type @challenge-instance-model) "/*")}] 
         [:p 
-          [:button { :on-click #(submit-file challenge-instance-id) } "Send" ]]])))
+          [:button { :on-click #(submit-file match-id challenge-instance-id) } "Send" ]]])))
   
 ; (defn submit-image-page []
 ;   (let [fields (atom {})]
@@ -115,7 +115,6 @@
   (let [match-model (atom nil)]
     (get-active-match match-model)
     (fn [] 
-      (prn "match-model" @match-model)
       [:div 
        [:h2 "Same Day Different Lives"]
        (if @user-model 
@@ -215,7 +214,7 @@
            [:div.challenge {:class (if (active? challenge) "active-challenge")}
             [:p (str "Challenge " (:challenge-instance-id challenge))]
             (when (and (responded-to-challenge? challenge) (active? challenge))
-              [:a {:href (str "/respond/" (:challenge-instance-id challenge))} "Answer now!"])])]))))
+              [:a {:href (str "/match/" match-id "/respond/" (:challenge-instance-id challenge))} "Answer now!"])])]))))
        
        
 (defn current-page []
@@ -238,11 +237,10 @@
   (session/put! :current-page #'signup-page))
 
 (secretary/defroute "/match/:match-id" [match-id]
-  (prn "match-id" match-id)
   (session/put! :current-page [#'match-page match-id]))
 
-(secretary/defroute "/respond/:challenge-instance-id" [challenge-instance-id]
-  (session/put! :current-page [#'respond-page challenge-instance-id]))
+(secretary/defroute "/match/:match-id/respond/:challenge-instance-id" [match-id challenge-instance-id]
+  (session/put! :current-page [#'respond-page match-id challenge-instance-id]))
 
 
 
