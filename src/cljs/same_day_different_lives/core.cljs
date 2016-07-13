@@ -198,9 +198,10 @@
               [:div.row 
                [:div {:class "two columns"} 
                 [:div.header (:user response)]]
-               (if (= "image" (:type challenge))
-                 [:div {:class "ten columns"}
-                   [:img.response-image {:src (str "/uploads/" (:filename response))}]])])])
+               [:div {:class "ten columns"}
+                (if (= "image" (:type challenge))
+                  [:img.response-image {:src (str "/uploads/" (:filename response))}]
+                  [:audio {:controls true :src (str "/uploads/" (:filename response))}])]])])
          [:div.row.section 
           [:h4 (str "Plus " (count upcoming-challenges) " more challenges to come...")]]]))))
        

@@ -12,7 +12,7 @@ INSERT INTO challenges (type, description) VALUES
 	('image', 'Take a photo of your favorite piece of clothing'),
 	('audio', 'What is the first memory that you have of your parents'),
 	('audio', 'What is worrying you the most right now?'),
-	('image', 'Take a photo of something that makes you happy?'),
+	('image', 'Take a photo of something that makes you happy'),
 	('audio', 'Tell about something that has changed a lot recently'),
 	('audio', 'What was the scariest moment of your life?')
 ;
