@@ -24,6 +24,10 @@
 (def db (merge (:db env) { :stringtype "unspecified" }))
 
 
+(defn include-css-version [css-base-filename] 
+  (include-css (str "/css/" css-base-filename (if (not (env :dev)) "min") ".css")))
+
+
 ;;; WEBSITE
 
 (def mount-target
@@ -34,14 +38,17 @@
    [:meta {:charset "utf-8"}]
    [:meta {:name "viewport"
            :content "width=device-width, initial-scale=1"}]
-   (include-css (if (env :dev) "/css/site.css" "/css/site.min.css"))])
+   (include-css-version "normalize")
+   (include-css-version "skeleton")
+   (include-css-version "site")])
 
 (def loading-page
   (html5
     (head)
-    [:body {:class "body-container"}
-     mount-target
-     (include-js "/js/app.js")]))
+    [:body 
+     [:div.container 
+       mount-target
+       (include-js "/js/app.js")]]))
 
 
 ;;; API

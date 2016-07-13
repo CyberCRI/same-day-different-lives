@@ -51,7 +51,9 @@
 
   :minify-assets
   {:assets
-   {"resources/public/css/site.min.css" "resources/public/css/site.css"}}
+   {"resources/public/css/site.min.css" "resources/public/css/site.css"
+    "resources/public/css/normalize.min.css" "resources/public/css/normalize.css"
+    "resources/public/css/skeleton.min.css" "resources/public/css/skeleton.css"}}
 
   :cljsbuild {:builds {:app {:source-paths ["src/cljs" "src/cljc"]
                              :compiler {:output-to "target/cljsbuild/public/js/app.js"

@@ -88,28 +88,6 @@
                  :accept (str (:type @challenge-instance-model) "/*")}] 
         [:p 
           [:button { :on-click #(submit-file match-id challenge-instance-id) } "Send" ]]])))
-  
-; (defn submit-image-page []
-;   (let [fields (atom {})]
-;     (fn []
-;       [:div 
-;        [:h2 "Same Day Different Lives"]
-;        [:h3 "Take a photo of your breakfast"]
-;        [bind-fields [:input {:field :file :id :file-input :accept "image/*"}] fields]
-;        [:p 
-;         [:button { :on-click submit-file } "Send" ]]
-;        ])))
-
-; (defn submit-audio-page []
-;   (let [fields (atom {})]
-;     (fn []
-;       [:div 
-;        [:h2 "Same Day Different Lives"]
-;        [:h3 "Tell us about the first time you noticed that you were different"]
-;        [bind-fields [:input {:field :file :id :file-input :accept "audio/*"}] fields]
-;        [:p 
-;         [:button { :on-click submit-file } "Send" ]]
-;        ])))
 
 (defn home-page [] 
   (let [match-model (atom nil)]
@@ -212,14 +190,16 @@
          [:p (if (:running match) "Going now" "Already over")]
          (for [challenge showable-challenges]
            [:div.challenge {:class (if (active? challenge) "active-challenge")}
-            [:p "Challenge: " [:em (:description challenge)]]
+            [:h4 "Challenge: " [:em (:description challenge)]]
             (when (and (not (responded-to-challenge? challenge)) (active? challenge))
               [:a {:href (str "/match/" match-id "/respond/" (:challenge-instance-id challenge))} "Answer now!"])
             (for [response (:responses challenge)]
-              [:div 
-               [:p (str (:user response) ":")]
+              [:div.row 
+               [:div {:class "two columns"} 
+                [:div.header (:user response)]]
                (if (= "image" (:type challenge))
-                 [:img.response-image {:src (str "/uploads/" (:filename response))}])])])]))))
+                 [:div {:class "ten columns"}
+                   [:img.response-image {:src (str "/uploads/" (:filename response))}]])])])]))))
        
        
 (defn current-page []
