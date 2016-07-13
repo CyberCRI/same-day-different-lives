@@ -43,55 +43,79 @@
 
 (defn get-active-match [match-model]
   (GET "/api/me/match" 
-    {:handler (fn [match] (reset! match-model (keywordize-keys match)))}))
+    {:handler (fn [match] 
+                (prn "match is " match)
+                (let [match-keys (keywordize-keys match)]
+                  (reset! match-model (if (:match-id match-keys) match-keys nil))))}))
 
 (defn get-match-model [match-id match-model]
   (GET (str "/api/match/" match-id) 
     {:handler (fn [match] (reset! match-model (keywordize-keys match)))}))
- 
- 
- (defn find-first-other [col value]
-   ; Returns the first item in col that is not equal to val
-   (first (filter #(not= % value) col))) 
 
-;; -------------------------
-;; Views
+(defn get-challenge-instance [challenge-instance-id challenge-instance-model]
+  (GET (str "/api/challenge-instance/" challenge-instance-id) 
+    {:handler (fn [challenge-instance] (reset! challenge-instance-model (keywordize-keys challenge-instance)))}))
 
-(defn submit-file [] 
+ 
+(defn find-first-other [col value]
+ ; Returns the first item in col that is not equal to val
+ (first (filter #(not= % value) col))) 
+
+(defn submit-file [challenge-instance-id] 
   (let [file-input (js/document.getElementById "file-input")
         file (aget file-input "files" 0)
         form-data (doto
                     (js/FormData.)
                     (.append "file" file (aget file "name")))]
-  (POST "/api/files" {:body form-data
-                      :error-handler #(prn "error" %)})))
-  
-(defn submit-image-page []
-  (let [fields (atom {})]
-    (fn []
-      [:div 
-       [:h2 "Same Day Different Lives"]
-       [:h3 "Take a photo of your breakfast"]
-       [bind-fields [:input {:field :file :id :file-input :accept "image/*"}] fields]
-       [:p 
-        [:button { :on-click submit-file } "Send" ]]
-       ])))
+  (POST (str "/api/challenge-instance/" challenge-instance-id) 
+    {:body form-data
+     :error-handler #(prn "error uploading")})))
 
-(defn submit-audio-page []
-  (let [fields (atom {})]
+
+;; -------------------------
+;; Views
+
+(defn respond-page [challenge-instance-id]
+  (let [challenge-instance-model (atom nil)]
+    (get-challenge-instance challenge-instance-id challenge-instance-model)
     (fn []
       [:div 
-       [:h2 "Same Day Different Lives"]
-       [:h3 "Tell us about the first time you noticed that you were different"]
-       [bind-fields [:input {:field :file :id :file-input :accept "audio/*"}] fields]
-       [:p 
-        [:button { :on-click submit-file } "Send" ]]
-       ])))
+        [:h2 "Same Day Different Lives"]
+        [:h3 (:description @challenge-instance-model)]
+        [:p (str "Reply with a " (if (= "audio" (:type @challenge-instance-model)) "recording" "picture"))]
+        [:input {:type :file 
+                 :id :file-input 
+                 :accept (str (:type @challenge-instance-model) "/*")}] 
+        [:p 
+          [:button { :on-click #(submit-file challenge-instance-id) } "Send" ]]])))
+  
+; (defn submit-image-page []
+;   (let [fields (atom {})]
+;     (fn []
+;       [:div 
+;        [:h2 "Same Day Different Lives"]
+;        [:h3 "Take a photo of your breakfast"]
+;        [bind-fields [:input {:field :file :id :file-input :accept "image/*"}] fields]
+;        [:p 
+;         [:button { :on-click submit-file } "Send" ]]
+;        ])))
+
+; (defn submit-audio-page []
+;   (let [fields (atom {})]
+;     (fn []
+;       [:div 
+;        [:h2 "Same Day Different Lives"]
+;        [:h3 "Tell us about the first time you noticed that you were different"]
+;        [bind-fields [:input {:field :file :id :file-input :accept "audio/*"}] fields]
+;        [:p 
+;         [:button { :on-click submit-file } "Send" ]]
+;        ])))
 
 (defn home-page [] 
   (let [match-model (atom nil)]
     (get-active-match match-model)
     (fn [] 
+      (prn "match-model" @match-model)
       [:div 
        [:h2 "Same Day Different Lives"]
        (if @user-model 
@@ -171,6 +195,10 @@
       (< (to-ms starts-at) (js/Date.now))
       (> (to-ms ends-at) (js/Date.now)))))
 
+(defn responded-to-challenge? [challenge]
+  (let [responses (:responses challenge)]
+    (empty? (filter #(= (:user %) (:pseudo @user-model)) responses))))
+
 (defn match-page [match-id]
   (let [match-model (atom nil)]
     (get-match-model match-id match-model)
@@ -185,8 +213,9 @@
          [:p (if (:running match) "Going now" "Already over")]
          (for [challenge showable-challenges]
            [:div.challenge {:class (if (active? challenge) "active-challenge")}
-            [:p (str "Challenge " (:challenge-instance-id challenge))
-             [:p (str "Starts at " (:starts-at challenge))]]])]))))
+            [:p (str "Challenge " (:challenge-instance-id challenge))]
+            (when (and (responded-to-challenge? challenge) (active? challenge))
+              [:a {:href (str "/respond/" (:challenge-instance-id challenge))} "Answer now!"])])]))))
        
        
 (defn current-page []
@@ -212,11 +241,8 @@
   (prn "match-id" match-id)
   (session/put! :current-page [#'match-page match-id]))
 
-(secretary/defroute "/record" []
-  (session/put! :current-page #'submit-audio-page))
-
-(secretary/defroute "/audio" []
-  (session/put! :current-page #'submit-image-page))
+(secretary/defroute "/respond/:challenge-instance-id" [challenge-instance-id]
+  (session/put! :current-page [#'respond-page challenge-instance-id]))
 
 
 

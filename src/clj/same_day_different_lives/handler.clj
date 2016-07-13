@@ -55,13 +55,14 @@
   (apply str (repeatedly len #(rand-nth "0123456789abcdefghijklmnopqrstuvwxyz"))))
 
 (defn create-file [request]
-  (let [{{{tempfile :tempfile content-type :content-type} "file"} :params :as params} request
+  "Returns the name of the created file"
+  (let [{{{tempfile :tempfile content-type :content-type} :file} :params :as params} request
         extension (last (string/split content-type (re-pattern "/")))
         new-filename (str (temp-name 20) "." extension)]
-    ;(prn "received file " params)
+    ; (prn "received file " params)
     (io/copy tempfile (io/file (str "uploads/" new-filename)))
-    (response {})))
-  
+    { :filename new-filename :mime-type content-type}))
+
 (defn create-user [request]
   (let [{:keys [pseudo email password]} (:body request)]
    (if-not (and pseudo email password) 
@@ -132,12 +133,13 @@
         {:challenge-instance-id challenge_instance_id :type type :description description}))
 
 (defn get-challenge-responses [challenge-instance-id]
-  (let [responses (jdbc/query db ["select user_id, filename, mime_type, created_at 
-                                  from challenge_responses 
-                                  where challenge_instance_id = ?"
+  (let [responses (jdbc/query db ["select users.pseudo, challenge_responses.filename, challenge_responses.mime_type, challenge_responses.created_at 
+                                  from challenge_responses, users 
+                                  where challenge_responses.user_id = users.user_id
+                                    and challenge_instance_id = ?"
                                   challenge-instance-id])]
-    (for [[{:keys [user_id filename mime_type created_at]}] responses]
-      {:user-id user_id :filename filename :mime-type mime_type :created-at created_at})))
+    (for [[{:keys [pseudo filename mime_type created_at]}] responses]
+      {:user pseudo :filename filename :mime-type mime_type :created-at created_at})))
 
 (defn get-challenges-in-match [match-id]
   (let [challenges (jdbc/query db ["select challenge_instance_id, type, description, challenge_instances.starts_at, challenge_instances.ends_at
@@ -155,6 +157,26 @@
     ; For each challenge, associate any responses
     (for [challenge challenges]
       (assoc challenge :responses (get-challenge-responses (:challenge_instance_id challenge))))))
+
+(defn get-challenge-instance [challenge-instance-id]
+  (first (jdbc/query db ["select challenge_instances.challenge_instance_id, challenges.challenge_id, challenges.type, challenges.description, challenge_instances.starts_at, challenge_instances.ends_at
+                          from challenge_instances, challenges 
+                          where challenges.challenge_id = challenge_instances.challenge_id
+                            and challenge_instances.challenge_instance_id = ?"
+                          challenge-instance-id]
+           {:row-fn (fn [{:keys [challenge_instance_id challenge_id type description starts_at ends_at]}]
+                       {:challenge-instance-id challenge_instance_id 
+                        :challenge-id challenge_id
+                        :type type 
+                        :description description 
+                        :starts-at (.toString starts_at) 
+                        :ends-at (.toString ends_at)})})))
+
+(defn submit-challenge-response [user-id challenge-instance-id filename mime-type]
+  (jdbc/insert! db :challenge_responses {:user_id user-id 
+                                         :challenge_instance_id challenge-instance-id
+                                         :filename filename
+                                         :mime_type mime-type}))
 
 (defn get-user-pseudo [user-id]
   (first (jdbc/query db ["select pseudo from users where user_id = ?" user-id]
@@ -185,15 +207,29 @@
   (response {:challenges (get-challenges-in-match (:match-id params))
              :match (get-match-info (:match-id params))}))
 
+(defn obtain-challenge-instance [{:keys [session params]}]
+  ; TODO: check that you have the right to access this challenge
+  (response (get-challenge-instance (:challenge-instance-id params))))
+
+(defn post-challenge-response [request]
+  ; TODO: check that we are allowed to submit
+  (let [{:keys [session params]} request 
+        {:keys [filename mime-type]} (create-file request)]
+    (submit-challenge-response 
+      (:user-id session) 
+      (:challenge-instance-id params) 
+      filename 
+      mime-type)
+    (response {:filename filename})))
+
+
 ;;; ROUTES
 
-(def cljs-urls ["/" "/record" "/login" "/signup" "/match/:match-id"])
+(def cljs-urls ["/" "/record" "/login" "/signup" "/match/:match-id" "/respond/:challenge-instance-id"])
 
 (def site-routes (apply routes (for [url cljs-urls] (GET url [] loading-page))))
 
 (defroutes api-routes 
-  (POST "/api/files" [] (-> create-file wrap-multipart-params wrap-params wrap-json-response))
-  
   (POST "/api/users" [] (-> create-user wrap-keywordize wrap-json-body wrap-json-response))
 
   (GET "/api/me" [] (-> get-user-info wrap-keywordize wrap-require-user wrap-json-body wrap-json-response))
@@ -202,6 +238,9 @@
   (GET "/api/me/match" [] (-> obtain-active-match wrap-require-user wrap-json-body wrap-json-response))
   (GET "/api/match/:match-id" [] (-> obtain-match-history wrap-require-user wrap-json-body wrap-json-response))
 
+  (GET "/api/challenge-instance/:challenge-instance-id" [] (-> obtain-challenge-instance wrap-require-user wrap-json-body wrap-json-response))
+  (POST "/api/challenge-instance/:challenge-instance-id" [] (-> post-challenge-response wrap-multipart-params wrap-params wrap-json-response))
+  
   (POST "/api/login" [] (-> login wrap-json-body wrap-json-response))
   (POST "/api/logout" [] (-> logout wrap-keywordize wrap-json-body wrap-json-response wrap-require-user)))
 

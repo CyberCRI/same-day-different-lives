@@ -54,5 +54,5 @@
   (go
     (while true
       (<! (timeout 1000))
-      ; TODO: expire matches
+      ; TODO: expire matches, and change users to "stopped playing"
       (pair-users))))
