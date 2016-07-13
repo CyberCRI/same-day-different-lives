@@ -189,7 +189,7 @@
          [:h3 (str "Conversation with " other-pseudo)]
          [:p (if (:running match) "Going now" "Already over")]
          (for [challenge showable-challenges]
-           [:div.challenge {:class (if (active? challenge) "active-challenge")}
+           [:div.box.challenge 
             [:h4 "Challenge: " [:em (:description challenge)]]
             (when (and (not (responded-to-challenge? challenge)) (active? challenge))
               [:a {:href (str "/match/" match-id "/respond/" (:challenge-instance-id challenge))} "Answer now!"])
