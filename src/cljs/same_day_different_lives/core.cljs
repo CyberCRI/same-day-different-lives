@@ -183,7 +183,8 @@
       (let [{:keys [match challenges]} @match-model
             other-pseudo (find-first-other [(:user-a match) (:user-b match)] 
                                            (:pseudo @user-model))
-            showable-challenges (filter #(< (to-ms (:starts-at %)) (js/Date.now)) challenges)] 
+            showable-challenges (filter #(< (to-ms (:starts-at %)) (js/Date.now)) challenges)
+            upcoming-challenges (filter #(> (to-ms (:starts-at %)) (js/Date.now)) challenges)] 
         [:div 
          [:h2 "Same Day Different Lives"]
          [:h3 (str "Conversation with " other-pseudo)]
@@ -199,7 +200,9 @@
                 [:div.header (:user response)]]
                (if (= "image" (:type challenge))
                  [:div {:class "ten columns"}
-                   [:img.response-image {:src (str "/uploads/" (:filename response))}]])])])]))))
+                   [:img.response-image {:src (str "/uploads/" (:filename response))}]])])])
+         [:div.row.section 
+          [:h4 (str "Plus " (count upcoming-challenges) " more challenges to come...")]]]))))
        
        
 (defn current-page []
