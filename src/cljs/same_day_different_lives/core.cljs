@@ -96,13 +96,13 @@
       [:div 
        [:h2 "Same Day Different Lives"]
        (if @user-model 
-         [:div 
-          [:p (str "You are logged in as " (:pseudo @user-model))]
-          [:p [:button { :on-click logout } "Logout"]]
+        [:div 
+          [:div.u-full-width.align-right "You are logged in as " [:strong (:pseudo @user-model)] " "
+            [:button { :on-click logout } "Logout"]]
           (case (:status @user-model) 
             "dormant" [:div 
                        [:p "Do you want to play?"]
-                       [:p [:button { :on-click #(change-state "ready") } "Find a match" ]]]
+                       [:p [:button.button-primary { :on-click #(change-state "ready") } "Find a match" ]]]
             "ready"   [:div 
                        [:p "Waiting for the game to find a match for you"]
                        [:p [:button { :on-click #(change-state "dormant") } "I don't want to play" ]]]
@@ -112,10 +112,10 @@
                          [:p 
                           [:a {:href (str "/match/" (:match-id @match-model))} "See your current conversation"]])
                        [:p [:button { :on-click #(change-state "dormant") } "Stop playing" ]]])]
-         [:p "You need to " 
-          [:a {:href "/login"} "login"]
+        [:p "Start by " 
+          [:a {:href "/login"} "logging in"]
           " or " 
-          [:a {:href "/signup"} "sign up"]])])))
+          [:a {:href "/signup"} "signing up"]])])))
 
 (defn login-page [] 
   (let [fields (atom {})
@@ -124,7 +124,9 @@
                 (POST "/api/login" 
                   {:params @fields 
                    :format :json 
-                   :handler #((check-login) (accountant/navigate! "/"))
+                   :handler (fn [] 
+                              (check-login) 
+                              (accountant/navigate! "/"))
                    :error-handler #(reset! error-message "Could not log in")}))]
     (fn []
       [:div 
@@ -149,23 +151,36 @@
   (let [fields (atom {})
         error-message (atom nil)
         signup (fn [] 
-                (POST "/api/users" 
-                  {:params @fields 
-                   :format :json 
-                   :handler #(accountant/navigate! "/login")
-                   :error-handler #(reset! error-message "Could not sign up")}))]
+                (if (not= (:password @fields) (:password2 @fields))
+                  (reset! error-message "Passwords don't match")
+                  (POST "/api/users" 
+                    {:params @fields 
+                     :format :json 
+                     :handler #(accountant/navigate! "/login")
+                     :error-handler #(reset! error-message "Could not sign up")})))]
     (fn []
       [:div 
        [:h2 "Same Day Different Lives"]
        [:h3 "Sign up"]
        [bind-fields 
         [:div 
-         [:p "Email " [:input {:field :text :id :email}]] 
-         [:p "Pseudoname " [:input {:field :text :id :pseudo}]] 
-         [:p "Password " [:input {:field :password :id :password}]]] 
+          [:div.row
+           [:div.six.columns
+            [:label {:for "email"} "Email (kept private)"] 
+            [:input.u-full-width {:field :text :id :email}]] 
+           [:div.six.columns
+            [:label {:for "pseudo"} "Pseudonyme (this will be shown to others)"] 
+            [:input.u-full-width {:field :text :id :pseudo}]]] 
+          [:div.row
+           [:div.six.columns
+            [:label {:for "password"} "Password"] 
+            [:input.u-full-width {:field :password :id :password}]]
+           [:div.six.columns
+            [:label {:for "password2"} "Confirm password"] 
+            [:input.u-full-width {:field :password :id :password2}]]]]
         fields]
        [:p 
-        [:button {:on-click signup} "Sign up"]]
+        [:button.button-primary {:on-click signup} "Sign up"]]
        [:p.error-message @error-message]
        ])))
 
