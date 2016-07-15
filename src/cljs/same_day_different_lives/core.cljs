@@ -49,11 +49,13 @@
 
 (defn get-match-model [match-id match-model]
   (GET (str "/api/match/" match-id) 
-    {:handler (fn [match] (reset! match-model (keywordize-keys match)))}))
+    {:handler (fn [match] (reset! match-model (keywordize-keys match)))
+     :error-handler (fn [response] (reset! match-model {:error (get-in (keywordize-keys response) [:response :error])}))}))
 
 (defn get-challenge-instance [challenge-instance-id challenge-instance-model]
   (GET (str "/api/challenge-instance/" challenge-instance-id) 
-    {:handler (fn [challenge-instance] (reset! challenge-instance-model (keywordize-keys challenge-instance)))}))
+    {:handler (fn [challenge-instance] (reset! challenge-instance-model (keywordize-keys challenge-instance)))
+     :error-handler (fn [response] (reset! challenge-instance-model {:error (get-in (keywordize-keys response) [:response :error])}))}))
 
  
 (defn find-first-other [col value]
@@ -75,19 +77,26 @@
 ;; -------------------------
 ;; Views
 
+(defn header []
+  [:div 
+    [:h2 "Same Day Different Lives"]])
+
 (defn respond-page [match-id challenge-instance-id]
   (let [challenge-instance-model (atom nil)]
     (get-challenge-instance challenge-instance-id challenge-instance-model)
     (fn []
       [:div 
-        [:h2 "Same Day Different Lives"]
-        [:h3 (:description @challenge-instance-model)]
-        [:p (str "Reply with a " (if (= "audio" (:type @challenge-instance-model)) "recording" "picture"))]
-        [:input {:type :file 
-                 :id :file-input 
-                 :accept (str (:type @challenge-instance-model) "/*")}] 
-        [:p 
-          [:button { :on-click #(submit-file match-id challenge-instance-id) } "Send" ]]])))
+        [header]
+        (if (:error @challenge-instance-model)
+          [:p.error-message (str "Error: " (:error @challenge-instance-model))]
+          [:div
+            [:h3 (:description @challenge-instance-model)]
+            [:p (str "Reply with a " (if (= "audio" (:type @challenge-instance-model)) "recording" "picture"))]
+            [:input {:type :file 
+                     :id :file-input 
+                     :accept (str (:type @challenge-instance-model) "/*")}] 
+            [:p 
+              [:button { :on-click #(submit-file match-id challenge-instance-id) } "Send" ]]])])))
 
 (defn home-page [] 
   (let [match-model (atom nil)]
@@ -200,30 +209,33 @@
   (let [match-model (atom nil)]
     (get-match-model match-id match-model)
     (fn []
-      (let [{:keys [match challenges]} @match-model
-            other-pseudo (find-first-other [(:user-a match) (:user-b match)] 
-                                           (:pseudo @user-model))
-            showable-challenges (filter #(< (to-ms (:starts-at %)) (js/Date.now)) challenges)
-            upcoming-challenges (filter #(> (to-ms (:starts-at %)) (js/Date.now)) challenges)] 
-        [:div 
-         [:h2 "Same Day Different Lives"]
-         [:h3 (str "Conversation with " other-pseudo)]
-         [:p (if (:running match) "Going now" "Already over")]
-         (for [challenge showable-challenges]
-           [:div.box.challenge 
-            [:h4 "Challenge: " [:em (:description challenge)]]
-            (when (and (not (responded-to-challenge? challenge)) (active? challenge))
-              [:a {:href (str "/match/" match-id "/respond/" (:challenge-instance-id challenge))} "Answer now!"])
-            (for [response (:responses challenge)]
-              [:div.row 
-               [:div {:class "two columns"} 
-                [:div.header (:user response)]]
-               [:div {:class "ten columns"}
-                (if (= "image" (:type challenge))
-                  [:img.response-image {:src (str "/uploads/" (:filename response))}]
-                  [:audio.response-image {:controls true :src (str "/uploads/" (:filename response))}])]])])
-         [:div.row.section 
-          [:h4 (str "Plus " (count upcoming-challenges) " more challenges to come...")]]]))))
+      [:div
+        [header]
+        (if (:error @match-model)
+          [:p.error-message (str "Error: " (:error @match-model))]
+          (let [{:keys [match challenges]} @match-model
+                other-pseudo (find-first-other [(:user-a match) (:user-b match)] 
+                                               (:pseudo @user-model))
+                showable-challenges (filter #(< (to-ms (:starts-at %)) (js/Date.now)) challenges)
+                upcoming-challenges (filter #(> (to-ms (:starts-at %)) (js/Date.now)) challenges)] 
+            [:div 
+             [:h3 (str "Conversation with " other-pseudo)]
+             [:p (if (:running match) "Going now" "Already over")]
+             (for [challenge showable-challenges]
+               [:div.box.challenge 
+                [:h4 "Challenge: " [:em (:description challenge)]]
+                (when (and (not (responded-to-challenge? challenge)) (active? challenge))
+                  [:a {:href (str "/match/" match-id "/respond/" (:challenge-instance-id challenge))} "Answer now!"])
+                (for [response (:responses challenge)]
+                  [:div.row 
+                   [:div {:class "two columns"} 
+                    [:div.header (:user response)]]
+                   [:div {:class "ten columns"}
+                    (if (= "image" (:type challenge))
+                      [:img.response-image {:src (str "/uploads/" (:filename response))}]
+                      [:audio.response-image {:controls true :src (str "/uploads/" (:filename response))}])]])])
+             [:div.row.section 
+              [:h4 (str "Plus " (count upcoming-challenges) " more challenges to come...")]]]))])))
        
        
 (defn current-page []

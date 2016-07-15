@@ -212,14 +212,32 @@
 (defn obtain-active-challenge [{session :session}]
   (response (get-active-challenge-for-user (:user-id session))))  
 
+(defn can-access-match [user-id match-id]
+  (not-empty (jdbc/query db ["select match_id 
+                              from matches 
+                              where match_id = ? 
+                                and (user_a = ? or user_b = ?)"
+                             match-id user-id user-id])))
+
 (defn obtain-match-history [{:keys [session params]}]
-  ; TODO: check that you have the right to access this match
-  (response {:challenges (get-challenges-in-match (:match-id params))
-             :match (get-match-info (:match-id params))}))
+  (if-not (can-access-match (:user-id session) (:match-id params))
+    (make-error-response "Cannot access that match")
+    (response {:challenges (get-challenges-in-match (:match-id params))
+               :match (get-match-info (:match-id params))})))
+
+(defn can-access-challenge-instance [user-id challenge-instance-id]
+  (not-empty (jdbc/query db ["select challenge_instances.challenge_instance_id
+                              from challenge_instances, challenges, matches 
+                              where challenges.challenge_id = challenge_instances.challenge_id
+                                and challenge_instances.match_id = matches.match_id
+                                and challenge_instances.challenge_instance_id = ?
+                                and (matches.user_a = ? or matches.user_b = ?)"
+                             challenge-instance-id user-id user-id])))
 
 (defn obtain-challenge-instance [{:keys [session params]}]
-  ; TODO: check that you have the right to access this challenge
-  (response (get-challenge-instance (:challenge-instance-id params))))
+  (if-not (can-access-challenge-instance (:user-id session) (:challenge-instance-id params))
+    (make-error-response "Cannot access that challenge instance")
+    (response (get-challenge-instance (:challenge-instance-id params)))))
 
 (defn post-challenge-response [request]
   ; TODO: check that we are allowed to submit
