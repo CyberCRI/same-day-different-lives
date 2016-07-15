@@ -73,13 +73,29 @@
      :error-handler #(prn "error uploading")
      :handler #(accountant/navigate! (str "/match/" match-id))})))
 
+(defn confirm [f text]
+  (when (js/confirm text) (f)))
+
 
 ;; -------------------------
 ;; Views
 
+(defn button-link [href text]
+  [:button {:on-click #(accountant/navigate! href)} text])
+
 (defn header []
-  [:div 
-    [:h2 "Same Day Different Lives"]])
+  [:div
+    [:div.u-full-width [:h2 "Same Day"]]
+    [:div.u-full-width.flip [:h2 "Different Lives"]]
+    [:div.row
+      [:div.two.columns [:a {:href "/"} "Home"]]
+      (if @user-model         
+        [:div.ten.columns.align-right "You are " [:strong (:pseudo @user-model)] " "
+          [:button { :on-click logout } "Logout"]]
+        [:div.ten.columns.align-right "Why not " 
+          [button-link "/login" "log in"]
+          " or " 
+          [button-link "/signup" "sign up"]])]])
 
 (defn respond-page [match-id challenge-instance-id]
   (let [challenge-instance-model (atom nil)]
@@ -96,35 +112,28 @@
                      :id :file-input 
                      :accept (str (:type @challenge-instance-model) "/*")}] 
             [:p 
-              [:button { :on-click #(submit-file match-id challenge-instance-id) } "Send" ]]])])))
+              [:button.button-primary { :on-click #(submit-file match-id challenge-instance-id) } "Send" ]]])])))
 
 (defn home-page [] 
   (let [match-model (atom nil)]
     (get-active-match match-model)
     (fn [] 
-      [:div 
-       [:h2 "Same Day Different Lives"]
+      [:div
+       [header] 
        (if @user-model 
-        [:div 
-          [:div.u-full-width.align-right "You are logged in as " [:strong (:pseudo @user-model)] " "
-            [:button { :on-click logout } "Logout"]]
-          (case (:status @user-model) 
-            "dormant" [:div 
-                       [:p "Do you want to play?"]
-                       [:p [:button.button-primary { :on-click #(change-state "ready") } "Find a match" ]]]
-            "ready"   [:div 
-                       [:p "Waiting for the game to find a match for you"]
-                       [:p [:button { :on-click #(change-state "dormant") } "I don't want to play" ]]]
-            "playing" [:div
-                       [:p "You are playing"]
-                       (when @match-model 
-                         [:p 
-                          [:a {:href (str "/match/" (:match-id @match-model))} "See your current conversation"]])
-                       [:p [:button { :on-click #(change-state "dormant") } "Stop playing" ]]])]
-        [:p "Start by " 
-          [:a {:href "/login"} "logging in"]
-          " or " 
-          [:a {:href "/signup"} "signing up"]])])))
+        (case (:status @user-model) 
+          "dormant" [:div 
+                     [:p "Do you want to play?"]
+                     [:p [:button.button-primary { :on-click #(change-state "ready") } "Find a match" ]]]
+          "ready"   [:div 
+                     [:p "Waiting for the game to find a match for you"]
+                     [:p [:button { :on-click #(change-state "dormant") } "I don't want to play anymore" ]]]
+          "playing" [:div
+                     [:p "You are playing"]
+                     (when @match-model 
+                       [:p 
+                         [:button.button-primary {:on-click #(accountant/navigate! (str "/match/" (:match-id @match-model)))} "Go to your shared journal"]])
+                     [:p [:button { :on-click (fn [] (confirm #(change-state "dormant") "Are you sure you want to stop?"))} "Stop playing" ]]]))])))
 
 (defn login-page [] 
   (let [fields (atom {})
@@ -219,21 +228,23 @@
                 showable-challenges (filter #(< (to-ms (:starts-at %)) (js/Date.now)) challenges)
                 upcoming-challenges (filter #(> (to-ms (:starts-at %)) (js/Date.now)) challenges)] 
             [:div 
-             [:h3 (str "Conversation with " other-pseudo)]
+             [:h3 (str "Journal with " other-pseudo)]
              [:p (if (:running match) "Going now" "Already over")]
-             (for [challenge showable-challenges]
-               [:div.box.challenge 
-                [:h4 "Challenge: " [:em (:description challenge)]]
-                (when (and (not (responded-to-challenge? challenge)) (active? challenge))
-                  [:a {:href (str "/match/" match-id "/respond/" (:challenge-instance-id challenge))} "Answer now!"])
-                (for [response (:responses challenge)]
-                  [:div.row 
-                   [:div {:class "two columns"} 
-                    [:div.header (:user response)]]
-                   [:div {:class "ten columns"}
-                    (if (= "image" (:type challenge))
-                      [:img.response-image {:src (str "/uploads/" (:filename response))}]
-                      [:audio.response-image {:controls true :src (str "/uploads/" (:filename response))}])]])])
+             (doall 
+               (for [challenge showable-challenges]
+                 ^{:key (:challenge-instance-id challenge)} [:div.box.challenge 
+                  [:h4 "Challenge: " [:em (:description challenge)]]
+                  (when (and (not (responded-to-challenge? challenge)) (active? challenge))
+                    [:div.row 
+                      [:button.button-primary {:on-click #(accountant/navigate! (str "/match/" match-id "/respond/" (:challenge-instance-id challenge)))} "Answer now"]])
+                  (for [response (:responses challenge)]
+                    ^{:key (:challenge-response-id response)} [:div.row 
+                     [:div {:class "two columns"} 
+                      [:div.header (:user response)]]
+                     [:div {:class "ten columns"}
+                      (if (= "image" (:type challenge))
+                        [:img.response-image {:src (str "/uploads/" (:filename response))}]
+                        [:audio.response-image {:controls true :src (str "/uploads/" (:filename response))}])]])]))
              [:div.row.section 
               [:h4 (str "Plus " (count upcoming-challenges) " more challenges to come...")]]]))])))
        

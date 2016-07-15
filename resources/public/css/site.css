@@ -33,3 +33,7 @@
 .align-right {
   text-align: right;
 }
+
+.flip {
+  transform: scaleX(-1);
+} 

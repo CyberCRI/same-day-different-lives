@@ -140,13 +140,14 @@
         {:challenge-instance-id challenge_instance_id :type type :description description}))
 
 (defn get-challenge-responses [challenge-instance-id]
-  (jdbc/query db ["select users.pseudo, challenge_responses.filename, challenge_responses.mime_type, challenge_responses.created_at 
+  (jdbc/query db ["select challenge_response_id, users.pseudo, challenge_responses.filename, challenge_responses.mime_type, challenge_responses.created_at 
                   from challenge_responses, users 
                   where challenge_responses.user_id = users.user_id
                     and challenge_instance_id = ?"
                   challenge-instance-id]
-              {:row-fn (fn [{:keys [pseudo filename mime_type created_at]}]
-                        {:user pseudo 
+              {:row-fn (fn [{:keys [challenge_response_id pseudo filename mime_type created_at]}]
+                        {:challenge-response-id challenge_response_id
+                         :user pseudo 
                          :filename filename 
                          :mime-type mime_type 
                          :created-at (.toString created_at)})}))
