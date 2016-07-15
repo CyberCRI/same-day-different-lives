@@ -243,12 +243,15 @@
   ; TODO: check that we are allowed to submit
   (let [{:keys [session params]} request 
         {:keys [filename mime-type]} (create-file request)]
-    (submit-challenge-response 
-      (:user-id session) 
-      (:challenge-instance-id params) 
-      filename 
-      mime-type)
-    (response {:filename filename})))
+    (if-not (can-access-challenge-instance (:user-id session) (:challenge-instance-id params))
+      (make-error-response "Cannot access that challenge instance")
+      (do
+        (submit-challenge-response 
+          (:user-id session) 
+          (:challenge-instance-id params) 
+          filename 
+          mime-type)
+        (response {:filename filename})))))
 
 
 ;;; ROUTES
