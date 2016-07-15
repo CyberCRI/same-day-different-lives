@@ -49,10 +49,25 @@
       ; Change user statuses
       (jdbc/update! db :users { :status "playing" } ["user_id in (?, ?)" user-a user-b]))))
 
+(defn expire-matches [] 
+  "Look for matches that are over, and expire them"
+  (let [expired-matches (jdbc/query db ["select match_id, user_a, user_b 
+                                        from matches
+                                        where running
+                                          and ends_at < now()"]
+                          {:row-fn (fn [{:keys [match_id user_a user_b]}]
+                                     {:match-id match_id :user-a user_a :user-b user_b})})]
+    (doseq [{:keys [match-id user-a user-b]} expired-matches]
+      (prn "expiring match " match-id)
+      ; Set match to expired
+      (jdbc/update! db :matches {:running false} ["match_id = ?" match-id])
+      ; Change user statuses
+      (jdbc/update! db :users { :status "ready" } ["user_id in (?, ?)" user-a user-b]))))
+
 (defn run-worker [] 
   (prn "worker started") 
   (go
     (while true
       (<! (timeout 1000))
-      ; TODO: expire matches, and change users to "stopped playing"
+      (expire-matches)
       (pair-users))))
