@@ -90,17 +90,23 @@
          (if (or (nil? user_id) (not (password/check password password-hash)))
            (make-error-response "Email or password doesn't match")
            (-> (response {:user_id user_id} )
-               (assoc :session {:user-id user_id :pseudo pseudo :email email :status status} ))))))))
+               (assoc :session {:user-id user_id} ))))))))
 
-; Require user in session or return error  
 (defn wrap-require-user [handler]
+  "Require user-id in session or return error.
+  Enrich request with :user map."
   (fn [request]
-    (if (-> request :session :user-id)
-      (handler request)
+    (if-let [user-id (-> request :session :user-id)]
+      (let [[{:keys [pseudo email status]}] (jdbc/query db ["select pseudo, email, status 
+                                                            from users
+                                                            where user_id = ?" user-id])] 
+        (-> request
+          (assoc :user {:user-id user-id email :email pseudo pseudo :status status})       
+          (handler)))
       (make-error-response "Access denied"))))
   
-(defn get-user-info [{session :session}] 
-  (response session))
+(defn get-user-info [{user :user}] 
+  (response user))
  
 ; TODO: when user withdraws active game, destroy/decativate remaining challenges
 (defn alter-user-info [{:keys [session body]}] 
@@ -108,8 +114,7 @@
         new-session (merge session safe-body)]
     (jdbc/execute! db ["update users set pseudo = ?, status = cast(? as user_status) where user_id = ?" 
                        (:pseudo new-session) (:status new-session) (:user-id session)])
-    (-> (response new-session)
-        (assoc :session new-session))))
+    (-> (response new-session))))
  
 (defn logout [request]
   (-> (response {})
@@ -271,7 +276,7 @@
   (GET "/api/match/:match-id" [] (-> obtain-match-history wrap-require-user wrap-json-body wrap-json-response))
 
   (GET "/api/challenge-instance/:challenge-instance-id" [] (-> obtain-challenge-instance wrap-require-user wrap-json-body wrap-json-response))
-  (POST "/api/challenge-instance/:challenge-instance-id" [] (-> post-challenge-response wrap-multipart-params wrap-params wrap-json-response))
+  (POST "/api/challenge-instance/:challenge-instance-id" [] (-> post-challenge-response wrap-require-user wrap-multipart-params wrap-params wrap-json-response))
   
   (POST "/api/login" [] (-> login wrap-json-body wrap-json-response))
   (POST "/api/logout" [] (-> logout wrap-keywordize wrap-json-body wrap-json-response wrap-require-user)))

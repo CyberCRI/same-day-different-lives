@@ -85,8 +85,9 @@
 
 (defn header []
   [:div
-    [:div.u-full-width [:h2 "Same Day"]]
-    [:div.u-full-width.flip [:h2 "Different Lives"]]
+    [:div.row 
+      [:div.six.columns [:h2 "Same Day"]]
+      [:div.six.columns.flip [:h2 "Different Lives"]]]
     [:div.row
       [:div.two.columns [:a {:href "/"} "Home"]]
       (if @user-model         
@@ -145,25 +146,26 @@
                    :handler (fn [] 
                               (check-login) 
                               (accountant/navigate! "/"))
-                   :error-handler #(reset! error-message "Could not log in")}))]
+                   :error-handler #(reset! error-message "Could not log in")})
+                false)]
     (fn []
       [:div 
        [:h2 "Same Day Different Lives"]
        [:h3 "Login"]
-       [bind-fields 
-        [:div.row
-         [:div.six.columns
-          [:label {:for "email"} "Email"] 
-          [:input.u-full-width {:field :text :id :email}]] 
-         [:div.six.columns
-          [:label {:for "password"} "Password"] 
-          [:input.u-full-width {:field :password :id :password}]]]
-        fields]
+       [:form {:on-submit login} 
+        [bind-fields 
+          [:div.row
+           [:div.six.columns
+            [:label {:for "email"} "Email"] 
+            [:input.u-full-width {:field :text :id :email :required true}]] 
+           [:div.six.columns
+            [:label {:for "password"} "Password"] 
+            [:input.u-full-width {:field :password :id :password :required true}]]]
+          fields]
+         [:div.row 
+          [:input.button-primary {:type :submit :value "Login"}]]
        [:div.row 
-        [:button.button-primary {:on-click login} "Login"]]
-       [:div.row 
-        [:p.error-message @error-message]]
-       ])))
+        [:p.error-message @error-message]]]])))
 
 (defn signup-page [] 
   (let [fields (atom {})
@@ -175,32 +177,33 @@
                     {:params @fields 
                      :format :json 
                      :handler #(accountant/navigate! "/login")
-                     :error-handler #(reset! error-message "Could not sign up")})))]
+                     :error-handler #(reset! error-message "Could not sign up")}))
+                false)]
     (fn []
       [:div 
        [:h2 "Same Day Different Lives"]
        [:h3 "Sign up"]
-       [bind-fields 
-        [:div 
-          [:div.row
-           [:div.six.columns
-            [:label {:for "email"} "Email (kept private)"] 
-            [:input.u-full-width {:field :text :id :email}]] 
-           [:div.six.columns
-            [:label {:for "pseudo"} "Pseudonyme (this will be shown to others)"] 
-            [:input.u-full-width {:field :text :id :pseudo}]]] 
-          [:div.row
-           [:div.six.columns
-            [:label {:for "password"} "Password"] 
-            [:input.u-full-width {:field :password :id :password}]]
-           [:div.six.columns
-            [:label {:for "password2"} "Confirm password"] 
-            [:input.u-full-width {:field :password :id :password2}]]]]
-        fields]
-       [:p 
-        [:button.button-primary {:on-click signup} "Sign up"]]
-       [:p.error-message @error-message]
-       ])))
+       [:form {:on-submit signup}
+         [bind-fields 
+          [:div 
+            [:div.row
+             [:div.six.columns
+              [:label {:for "email"} "Email (kept private)"] 
+              [:input.u-full-width {:field :text :id :email :required true}]] 
+             [:div.six.columns
+              [:label {:for "pseudo"} "Pseudonyme (this will be shown to others)"] 
+              [:input.u-full-width {:field :text :id :pseudo :required true}]]] 
+            [:div.row
+             [:div.six.columns
+              [:label {:for "password"} "Password"] 
+              [:input.u-full-width {:field :password :id :password :required true}]]
+             [:div.six.columns
+              [:label {:for "password2"} "Confirm password"] 
+              [:input.u-full-width {:field :password :id :password2 :required true}]]]]
+          fields]
+         [:p 
+          [:input.button-primary {:type :submit :value "Sign up"}]]
+         [:p.error-message @error-message]]])))
 
 (defn to-ms [date-string] (.getTime (new js/Date date-string)))
 
