@@ -3,6 +3,7 @@
             [compojure.route :refer [not-found resources files]]
             [hiccup.page :refer [include-js include-css html5]]
             [same-day-different-lives.middleware :refer [wrap-middleware]]
+            [same-day-different-lives.util :as util]
             [config.core :refer [env]]
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
@@ -101,36 +102,41 @@
                                                             from users
                                                             where user_id = ?" user-id])] 
         (-> request
-          (assoc :user {:user-id user-id email :email pseudo pseudo :status status})       
+          (assoc :user {:user-id user-id :email email :pseudo pseudo :status status})       
           (handler)))
       (make-error-response "Access denied"))))
   
+(defn get-active-match-for-user [user-id]
+  (first (jdbc/query db ["select match_id, user_a, user_b 
+                          from matches 
+                          where running 
+                            and (user_a = ? or user_b = ?)"
+                          user-id user-id]
+          {:row-fn (fn [{:keys [match_id user_a user_b]}] {:match-id match_id :user-a user_a :user-b user_b})})))
+
+(defn obtain-active-match [{session :session}]
+  (response (get-active-match-for-user (:user-id session))))  
+
 (defn get-user-info [{user :user}] 
   (response user))
  
-; TODO: when user withdraws active game, destroy/decativate remaining challenges
-(defn alter-user-info [{:keys [session body]}] 
-  (let [safe-body (select-keys body [:pseudo :status])
-        new-session (merge session safe-body)]
+(defn alter-user-info [{:keys [body user]}] 
+  (let [new-user (merge user (select-keys body [:pseudo :status]))]
+    (when (not= (:status new-user) (:status user))
+      ; Stop any matches going on
+      (when-let [{:keys [match-id user-a user-b]} (get-active-match-for-user (:user-id user))]
+        ; Set match to stopped
+        (prn "stopping match" match-id "for users" user-a user-b "by request of user" (:user-id user))
+        (jdbc/update! db :matches {:running false} ["match_id = ?" match-id])
+        ; Change other user's status
+        (jdbc/update! db :users { :status "ready" } ["user_id = ?" (util/find-first-other [user-a user-b] (:user-id user))])))
     (jdbc/execute! db ["update users set pseudo = ?, status = cast(? as user_status) where user_id = ?" 
-                       (:pseudo new-session) (:status new-session) (:user-id session)])
-    (-> (response new-session))))
+                       (:pseudo new-user) (:status new-user) (:user-id new-user)])
+    (-> (response new-user))))
  
 (defn logout [request]
   (-> (response {})
       (assoc :session nil)))
-
-(defn get-active-match-for-user [user-id]
-  (let [[{:keys [match_id]}]
-        (jdbc/query db ["select match_id 
-                        from matches 
-                        where starts_at < now() and ends_at > now() 
-                          and (user_a = ? or user_b = ?)"
-                        user-id user-id])]
-        {:match-id match_id}))
-
-(defn obtain-active-match [{session :session}]
-  (response (get-active-match-for-user (:user-id session))))  
 
 
 (defn get-active-challenge-for-user [user-id]
