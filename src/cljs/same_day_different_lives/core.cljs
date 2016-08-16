@@ -47,6 +47,12 @@
                 (let [match-keys (keywordize-keys match)]
                   (reset! match-model (if (:match-id match-keys) match-keys nil))))}))
 
+(defn get-matches [matches-model]
+  (GET "/api/me/matches" 
+    {:handler (fn [matches] 
+                (let [matches-keys (keywordize-keys matches)]
+                  (reset! matches-model (if (:match-id match-keys) matches-keys nil))))}))
+
 (defn get-match-model [match-id match-model]
   (GET (str "/api/match/" match-id) 
     {:handler (fn [match] (reset! match-model (keywordize-keys match)))

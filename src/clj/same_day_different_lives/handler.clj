@@ -119,6 +119,10 @@
 
 (defn get-user-info [{user :user}] 
   (response user))
+
+(defn get-user-pseudo [user-id]
+  (first (jdbc/query db ["select pseudo from users where user_id = ?" user-id]
+    {:row-fn :pseudo})))
  
 (defn alter-user-info [{:keys [body user]}] 
   (let [new-user (merge user (select-keys body [:pseudo :status]))]
@@ -138,6 +142,16 @@
   (-> (response {})
       (assoc :session nil)))
 
+
+(defn get-matches-for-user [user-id]
+  (let [matches (jdbc/query db ["select match_id, user_a, user_b, running, starts_at
+                                from matches 
+                                where(user_a = ? or user_b = ?)
+                                order by starts_at DESC"
+                                user-id user-id]
+                {:row-fn (fn [{:keys [match_id user_a user_b running starts_at]}] {:match-id match_id :user-a user_a :user-b user_b :running running :starts_at (.toString starts_at)})})]
+    (for [match matches] 
+      (assoc match :other-pseudo (get-user-pseudo (util/find-first-other [(:user-a match) (:user-b match)] user-id))))))
 
 (defn get-active-challenge-for-user [user-id]
   (let [[{:keys [challenge_instance_id type description]}]
@@ -200,10 +214,6 @@
                                          :filename filename
                                          :mime_type mime-type}))
 
-(defn get-user-pseudo [user-id]
-  (first (jdbc/query db ["select pseudo from users where user_id = ?" user-id]
-    {:row-fn :pseudo})))
-
 (defn get-match-info [match-id]
   (let [match (first (jdbc/query db ["select user_a, user_b, created_at, starts_at, ends_at, running 
                                       from matches
@@ -230,6 +240,9 @@
                               where match_id = ? 
                                 and (user_a = ? or user_b = ?)"
                              match-id user-id user-id])))
+
+(defn obtain-matches-for-user [{:keys [session]}]
+  (get-matches-for-user (:user-id session)))
 
 (defn obtain-match-history [{:keys [session params]}]
   (if-not (can-access-match (:user-id session) (:match-id params))
@@ -279,6 +292,7 @@
   (POST "/api/me" [] (-> alter-user-info wrap-keywordize wrap-require-user wrap-json-body wrap-json-response))
 
   (GET "/api/me/match" [] (-> obtain-active-match wrap-require-user wrap-json-body wrap-json-response))
+  (GET "/api/me/matches" [] (-> obtain-matches-for-user wrap-require-user wrap-json-body wrap-json-response))
   (GET "/api/match/:match-id" [] (-> obtain-match-history wrap-require-user wrap-json-body wrap-json-response))
 
   (GET "/api/challenge-instance/:challenge-instance-id" [] (-> obtain-challenge-instance wrap-require-user wrap-json-body wrap-json-response))
