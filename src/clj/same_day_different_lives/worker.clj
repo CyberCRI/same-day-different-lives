@@ -1,12 +1,12 @@
 (ns same-day-different-lives.worker
   (:require [clojure.core.async :refer [<! timeout chan go]]
-            [config.core :refer [env]]
+            [same-day-different-lives.config :refer [config]]
             [clojure.java.jdbc :as jdbc]
             [clj-time.jdbc]
             [clj-time.core :as t]
             [clj-time.coerce :as tc]))
 
-(def db (merge (:db env) { :stringtype "unspecified" }))
+(def db (merge (:db config) { :stringtype "unspecified" }))
 
 ; Taken from https://github.com/mikera/clojure-utils/blob/master/src/main/clojure/mikera/cljutils/loops.clj
 ; Licensed under LGPL 3
