@@ -46,7 +46,7 @@
    [:cljsbuild :builds :app :compiler :output-dir]
    [:cljsbuild :builds :app :compiler :output-to]]
 
-  :source-paths ["src/clj" "src/cljc" "."] ; Added . to load config.edn file
+  :source-paths ["src/clj" "src/cljc"] 
   :resource-paths ["resources" "target/cljsbuild"]
 
   :minify-assets
@@ -112,8 +112,6 @@
                    :cljsbuild {:builds {:app {:source-paths ["env/dev/cljs"]
                                               :compiler {:main "same-day-different-lives.dev"
                                                          :source-map true}}
-
-
 
                                         }
                                }}

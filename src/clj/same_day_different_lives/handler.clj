@@ -4,7 +4,7 @@
             [hiccup.page :refer [include-js include-css html5]]
             [same-day-different-lives.middleware :refer [wrap-middleware]]
             [same-day-different-lives.util :as util]
-            [config.core :refer [env]]
+            [same-day-different-lives.config :refer [config]]
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
             [ring.middleware.json :refer [wrap-json-response wrap-json-body]]
@@ -22,11 +22,11 @@
             [clj-time.core :as t]
             [clj-time.coerce :as tc]))
 
-(def db (merge (:db env) { :stringtype "unspecified" }))
+(def db (merge (:db config) { :stringtype "unspecified" }))
 
 
 (defn include-css-version [css-base-filename] 
-  (include-css (str "/css/" css-base-filename (if (not (env :dev)) "min") ".css")))
+  (include-css (str "/css/" css-base-filename (if (not (config :dev)) ".min") ".css")))
 
 
 ;;; WEBSITE
