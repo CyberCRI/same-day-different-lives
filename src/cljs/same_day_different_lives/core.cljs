@@ -50,8 +50,7 @@
 (defn get-matches [matches-model]
   (GET "/api/me/matches" 
     {:handler (fn [matches] 
-                (let [matches-keys (keywordize-keys matches)]
-                  (reset! matches-model (if (:match-id match-keys) matches-keys nil))))}))
+                (reset! matches-model (keywordize-keys matches)))}))
 
 (defn get-match-model [match-id match-model]
   (GET (str "/api/match/" match-id) 
@@ -122,12 +121,14 @@
               [:button.button-primary { :on-click #(submit-file match-id challenge-instance-id) } "Send" ]]])])))
 
 (defn home-page [] 
-  (let [match-model (atom nil)]
+  (let [match-model (atom nil)
+        past-matches-model (atom nil)]
     (get-active-match match-model)
+    (get-matches past-matches-model)
     (fn [] 
       [:div
        [header] 
-       (if @user-model 
+       (when @user-model 
         (case (:status @user-model) 
           "dormant" [:div 
                      [:p "Do you want to play?"]
@@ -140,7 +141,15 @@
                      (when @match-model 
                        [:p 
                          [:button.button-primary {:on-click #(accountant/navigate! (str "/match/" (:match-id @match-model)))} "Go to your shared journal"]])
-                     [:p [:button { :on-click (fn [] (confirm #(change-state "dormant") "Are you sure you want to stop?"))} "Stop playing" ]]]))])))
+                     [:p [:button { :on-click (fn [] (confirm #(change-state "dormant") "Are you sure you want to stop?"))} "Stop playing" ]]]))
+       (when @past-matches-model
+        [:div 
+         [:h3 "Past Journals"]
+         [:div @past-matches-model]
+         [:div "qsfd"]
+         (for [{:keys [match-id running starts_at other-pseudo]} @past-matches-model]
+           [:div.row 
+            [:div.two-columns (str "Journal with " other-pseudo)]])])])))
 
 (defn login-page [] 
   (let [fields (atom {})

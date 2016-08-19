@@ -242,7 +242,7 @@
                              match-id user-id user-id])))
 
 (defn obtain-matches-for-user [{:keys [session]}]
-  (get-matches-for-user (:user-id session)))
+  (response (get-matches-for-user (:user-id session))))
 
 (defn obtain-match-history [{:keys [session params]}]
   (if-not (can-access-match (:user-id session) (:match-id params))
