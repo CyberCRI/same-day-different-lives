@@ -122,9 +122,9 @@
 
 (defn home-page [] 
   (let [match-model (atom nil)
-        past-matches-model (atom nil)]
+        all-matches-model (atom nil)]
     (get-active-match match-model)
-    (get-matches past-matches-model)
+    (get-matches all-matches-model)
     (fn [] 
       [:div
        [header] 
@@ -142,14 +142,17 @@
                        [:p 
                          [:button.button-primary {:on-click #(accountant/navigate! (str "/match/" (:match-id @match-model)))} "Go to your shared journal"]])
                      [:p [:button { :on-click (fn [] (confirm #(change-state "dormant") "Are you sure you want to stop?"))} "Stop playing" ]]]))
-       (when @past-matches-model
-        [:div 
-         [:h3 "Past Journals"]
-         [:div @past-matches-model]
-         [:div "qsfd"]
-         (for [{:keys [match-id running starts_at other-pseudo]} @past-matches-model]
-           [:div.row 
-            [:div.two-columns (str "Journal with " other-pseudo)]])])])))
+       (when @all-matches-model
+        (let [past-matches (filter #(not (:running %1)) @all-matches-model)]
+          [:div 
+           [:h3 "Past Journals"]
+           (if (empty? past-matches)
+            [:p "No past journals"]
+            (for [{:keys [match-id starts_at other-pseudo]} past-matches]
+             [:div.row 
+              [:div.six.columns (str starts_at)]
+              [:div.six.columns 
+               [:a {:href (str "/match/" match-id)} (str "Journal with " other-pseudo)]]]))]))])))
 
 (defn login-page [] 
   (let [fields (atom {})
