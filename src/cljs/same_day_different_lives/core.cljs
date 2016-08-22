@@ -137,7 +137,7 @@
                      [:p "Waiting for the game to find a match for you"]
                      [:p [:button { :on-click #(change-state "dormant") } "I don't want to play anymore" ]]]
           "playing" [:div
-                     [:p "You are playing"]
+                     [:p "You are currently playing"]
                      (when @match-model 
                        [:p 
                          [:button.button-primary {:on-click #(accountant/navigate! (str "/match/" (:match-id @match-model)))} "Go to your shared journal"]])
@@ -258,19 +258,21 @@
                   (when (and (not (responded-to-challenge? challenge)) (active? challenge) (:running match))
                     [:div.row 
                       [:button.button-primary {:on-click #(accountant/navigate! (str "/match/" match-id "/respond/" (:challenge-instance-id challenge)))} "Answer now"]])
-                  (for [response (:responses challenge)]
-                    ^{:key (:challenge-response-id response)} [:div.row 
-                     [:div {:class "two columns"} 
-                      [:div.header (:user response)]]
-                     [:div {:class "ten columns"}
-                      (if (= "image" (:type challenge))
-                        [:img.response-image {:src (str "/uploads/" (:filename response))}]
-                        [:audio.response-image {:controls true :src (str "/uploads/" (:filename response))}])]])]))
+                  (if (empty? (:responses challenge))
+                    [:div.row
+                     [:p "No one has answered"]]
+                    (for [response (:responses challenge)]
+                      ^{:key (:challenge-response-id response)} [:div.row 
+                       [:div {:class "two columns"} 
+                        [:div.header (:user response)]]
+                       [:div {:class "ten columns"}
+                        (if (= "image" (:type challenge))
+                          [:img.response-image {:src (str "/uploads/" (:filename response))}]
+                          [:audio.response-image {:controls true :src (str "/uploads/" (:filename response))}])]]))]))
              [:div.row.section
               (if (and (:running match) (not-empty upcoming-challenges)) 
                 [:h4 (str "Plus " (count upcoming-challenges) " more challenges to come...")]
-                [:h4 "No more matches to come"])
-                ]]))])))
+                [:h4 "No more matches to come"])]]))])))
        
        
 (defn current-page []
