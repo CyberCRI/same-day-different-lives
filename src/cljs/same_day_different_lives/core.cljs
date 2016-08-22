@@ -250,12 +250,12 @@
                 upcoming-challenges (filter #(> (to-ms (:starts-at %)) (js/Date.now)) challenges)] 
             [:div 
              [:h3 (str "Journal with " other-pseudo)]
-             [:p (if (:running match) "Going now" "Already over")]
+             [:p (str "This match is " (if (:running match) "going on now" "already over"))]
              (doall 
                (for [challenge showable-challenges]
                  ^{:key (:challenge-instance-id challenge)} [:div.box.challenge 
                   [:h4 "Challenge: " [:em (:description challenge)]]
-                  (when (and (not (responded-to-challenge? challenge)) (active? challenge))
+                  (when (and (not (responded-to-challenge? challenge)) (active? challenge) (:running match))
                     [:div.row 
                       [:button.button-primary {:on-click #(accountant/navigate! (str "/match/" match-id "/respond/" (:challenge-instance-id challenge)))} "Answer now"]])
                   (for [response (:responses challenge)]
@@ -266,8 +266,11 @@
                       (if (= "image" (:type challenge))
                         [:img.response-image {:src (str "/uploads/" (:filename response))}]
                         [:audio.response-image {:controls true :src (str "/uploads/" (:filename response))}])]])]))
-             [:div.row.section 
-              [:h4 (str "Plus " (count upcoming-challenges) " more challenges to come...")]]]))])))
+             [:div.row.section
+              (if (and (:running match) (not-empty upcoming-challenges)) 
+                [:h4 (str "Plus " (count upcoming-challenges) " more challenges to come...")]
+                [:h4 "No more matches to come"])
+                ]]))])))
        
        
 (defn current-page []
