@@ -11,7 +11,7 @@
 ;; -------------------------
 ;; Data
 
-(def user-model (atom nil))
+(defonce user-model (atom nil))
 
 
 ;; -------------------------
