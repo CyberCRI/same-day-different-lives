@@ -97,7 +97,7 @@
       [:div.two.columns [:a {:href "/"} "Home"]]
       (if @user-model         
         [:div.ten.columns.align-right "You are " [:strong (:pseudo @user-model)] " "
-          [:button { :on-click logout } "Logout"]]
+          [:button { :on-click #(when (js/confirm "Are you sure you want logout?") (logout))} "Logout"]]
         [:div.ten.columns.align-right "Why not " 
           [button-link "/login" "log in"]
           " or " 
@@ -250,7 +250,7 @@
                 upcoming-challenges (filter #(> (to-ms (:starts-at %)) (js/Date.now)) challenges)] 
             [:div 
              [:h3 (str "Journal with " other-pseudo)]
-             [:p (str "This match is " (if (:running match) "going on now" "already over"))]
+             [:p (str "This journal is " (if (:running match) "going on now" "over"))]
              (doall 
                (for [challenge showable-challenges]
                  ^{:key (:challenge-instance-id challenge)} [:div.box.challenge 
@@ -272,7 +272,7 @@
              [:div.row.section
               (if (and (:running match) (not-empty upcoming-challenges)) 
                 [:h4 (str "Plus " (count upcoming-challenges) " more challenges to come...")]
-                [:h4 "No more matches to come"])]]))])))
+                [:h4 "No more challenges to come"])]]))])))
        
        
 (defn current-page []
