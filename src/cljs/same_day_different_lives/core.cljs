@@ -175,7 +175,7 @@
           [:div.row
            [:div.six.columns
             [:label {:for "email"} "Email"] 
-            [:input.u-full-width {:field :text :id :email :required true}]] 
+            [:input.u-full-width {:field :email :id :email :required true}]] 
            [:div.six.columns
             [:label {:for "password"} "Password"] 
             [:input.u-full-width {:field :password :id :password :required true}]]]
@@ -207,7 +207,7 @@
             [:div.row
              [:div.six.columns
               [:label {:for "email"} "Email (kept private)"] 
-              [:input.u-full-width {:field :text :id :email :required true}]] 
+              [:input.u-full-width {:field :email :id :email :required true}]] 
              [:div.six.columns
               [:label {:for "pseudo"} "Pseudonyme (this will be shown to others)"] 
               [:input.u-full-width {:field :text :id :pseudo :required true}]]] 
