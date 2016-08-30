@@ -5,6 +5,7 @@
             [same-day-different-lives.middleware :refer [wrap-middleware]]
             [same-day-different-lives.util :as util]
             [same-day-different-lives.config :refer [config]]
+            [same-day-different-lives.conversion :refer [convert-file]]
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
             [ring.middleware.json :refer [wrap-json-response wrap-json-body]]
@@ -65,17 +66,22 @@
 (defn create-file [request]
   "Returns the name of the created file"
   (let [{{{tempfile :tempfile content-type :content-type} :file} :params :as params} request
-        extension (last (string/split content-type (re-pattern "/")))
-        new-filename (str (temp-name 20) "." extension)]
-    ; (prn "received file " params)
-    (io/copy tempfile (io/file (str "uploads/" new-filename)))
-    { :filename new-filename :mime-type content-type}))
+        [file-category original-extension] (string/split content-type (re-pattern "/"))]
+    (if (and (= file-category "audio") (not= original-extension "mp3"))
+      ; Convert to MP3
+      (let [new-filename (str (temp-name 20) ".mp3")]
+        ; TODO: check for failure
+        (convert-file (.getPath tempfile) (str "uploads/" new-filename))
+        { :filename new-filename :mime-type "audio/mp3"})
+      ; No need to convert
+      (let [new-filename (str (temp-name 20) "extension")]
+        (io/copy tempfile (io/file (str "uploads/" new-filename)))
+        { :filename new-filename :mime-type content-type}))))
 
 (defn create-user [request]
   (let [{:keys [pseudo email password]} (:body request)]
    (if-not (and pseudo email password) 
      (make-error-response "Pseudo, email, and password are required")
-     ; TODO: encrypt password
      (do
       (jdbc/insert! db :users { :pseudo pseudo :email email :password (password/encrypt password) })
       (response {})))))
