@@ -9,7 +9,7 @@
               [clojure.string :as string]
               [clojure.walk :refer [keywordize-keys stringify-keys]]
               [cljs-http.client :as http]
-              [cljs.core.async :refer [<!]]))
+              [cljs.core.async :refer [<! chan]]))
 
 ;; -------------------------
 ;; Data
@@ -72,12 +72,18 @@
 (defn get-selected-file [] (aget (.getElementById js/document "file-input") "files" 0))
 
 (defn submit-file [match-id challenge-instance-id] 
-  (let [file (get-selected-file)]
-    (http/post (str "/api/challenge-instance/" challenge-instance-id)
-               {:multipart-params [["file" file]]})))
+  "Returns [response-chan progress-chan]"
+  (let [file (get-selected-file)
+        progress-chan (chan)
+        response-chan (http/post (str "/api/challenge-instance/" challenge-instance-id)
+                                  {:multipart-params [["file" file]]
+                                   :progress progress-chan})]
+    [response-chan progress-chan]))
 
 (defn confirm [f text]
   (when (js/confirm text) (f)))
+
+(defn format-percent [x] (str (.floor js/Math (* x 100)) "%"))
 
 
 ;; -------------------------
@@ -105,16 +111,24 @@
   (let [challenge-instance-model (atom nil)
         file-selected? (atom false)
         upload-in-progress? (atom false)
+        upload-progress (atom nil)
         error-message (atom nil)
         handle-submit (fn [] 
                         (when (not @upload-in-progress?)
-                          (go
-                            (reset! upload-in-progress? true)
-                            (let [response (<! (submit-file match-id challenge-instance-id))]
-                              (reset! upload-in-progress? false)
-                              (if (= :no-error (:error-code response))
-                                (accountant/navigate! (str "/match/" match-id))
-                                (reset! error-message (:body response)))))))]
+                          (reset! upload-in-progress? true)
+                          (let [[response-chan progress-chan] (submit-file match-id challenge-instance-id)]
+                            (go 
+                              (while @upload-in-progress?
+                                (let [[v ch] (alts! [response-chan progress-chan])]
+                                  (if (= ch response-chan)
+                                    ; Response finished
+                                    (do 
+                                      (reset! upload-in-progress? false)
+                                      (if (= :no-error (:error-code v))
+                                        (accountant/navigate! (str "/match/" match-id))
+                                        (reset! error-message (:body v))))
+                                    ; Progress event
+                                    (reset! upload-progress (format-percent (/ (:loaded v) (:total v)))))))))))]
     (get-challenge-instance challenge-instance-id challenge-instance-model)
     (fn []
       [:div 
@@ -131,7 +145,7 @@
             [:p 
               (when @file-selected?
                 [:button.button-primary {:on-click handle-submit} 
-                                        (if @upload-in-progress? "Sending..." "Send")])]
+                                        (if @upload-in-progress? (str "Sending... " @upload-progress) "Send")])]
             [:div.row 
               [:p.error-message @error-message]]])])))
 
