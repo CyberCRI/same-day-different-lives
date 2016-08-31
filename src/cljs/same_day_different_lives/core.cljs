@@ -1,4 +1,5 @@
 (ns same-day-different-lives.core
+    (:require-macros [cljs.core.async.macros :refer [go]])
     (:require [reagent.core :as reagent :refer [atom create-class]]
               [reagent.session :as session]
               [secretary.core :as secretary :include-macros true]
@@ -6,7 +7,9 @@
               [reagent-forms.core :refer [bind-fields]]
               [ajax.core :refer [GET POST]]
               [clojure.string :as string]
-              [clojure.walk :refer [keywordize-keys stringify-keys]]))
+              [clojure.walk :refer [keywordize-keys stringify-keys]]
+              [cljs-http.client :as http]
+              [cljs.core.async :refer [<!]]))
 
 ;; -------------------------
 ;; Data
@@ -61,22 +64,17 @@
   (GET (str "/api/challenge-instance/" challenge-instance-id) 
     {:handler (fn [challenge-instance] (reset! challenge-instance-model (keywordize-keys challenge-instance)))
      :error-handler (fn [response] (reset! challenge-instance-model {:error (get-in (keywordize-keys response) [:response :error])}))}))
-
  
 (defn find-first-other [col value]
  ; Returns the first item in col that is not equal to val
  (first (filter #(not= % value) col))) 
 
+(defn get-selected-file [] (aget (.getElementById js/document "file-input") "files" 0))
+
 (defn submit-file [match-id challenge-instance-id] 
-  (let [file-input (js/document.getElementById "file-input")
-        file (aget file-input "files" 0)
-        form-data (doto
-                    (js/FormData.)
-                    (.append "file" file (aget file "name")))]
-  (POST (str "/api/challenge-instance/" challenge-instance-id) 
-    {:body form-data
-     :error-handler #(prn "error uploading")
-     :handler #(accountant/navigate! (str "/match/" match-id))})))
+  (let [file (get-selected-file)]
+    (http/post (str "/api/challenge-instance/" challenge-instance-id)
+               {:multipart-params [["file" file]]})))
 
 (defn confirm [f text]
   (when (js/confirm text) (f)))
@@ -105,11 +103,18 @@
 
 (defn respond-page [match-id challenge-instance-id]
   (let [challenge-instance-model (atom nil)
-        upload-in-progress (atom false)
+        file-selected? (atom false)
+        upload-in-progress? (atom false)
+        error-message (atom nil)
         handle-submit (fn [] 
-                        (when (not @upload-in-progress)
-                          (submit-file match-id challenge-instance-id)
-                          (reset! upload-in-progress true)))]
+                        (when (not @upload-in-progress?)
+                          (go
+                            (reset! upload-in-progress? true)
+                            (let [response (<! (submit-file match-id challenge-instance-id))]
+                              (reset! upload-in-progress? false)
+                              (if (= :no-error (:error-code response))
+                                (accountant/navigate! (str "/match/" match-id))
+                                (reset! error-message (:body response)))))))]
     (get-challenge-instance challenge-instance-id challenge-instance-model)
     (fn []
       [:div 
@@ -121,10 +126,14 @@
             [:p (str "Reply with a " (if (= "audio" (:type @challenge-instance-model)) "recording" "picture"))]
             [:input {:type :file 
                      :id :file-input 
-                     :accept (str (:type @challenge-instance-model) "/*")}] 
+                     :accept (str (:type @challenge-instance-model) "/*")
+                     :on-change #(reset! file-selected? (get-selected-file))}] 
             [:p 
-              [:button.button-primary {:on-click handle-submit} 
-                                      (if @upload-in-progress "Sending..." "Send")]]])])))
+              (when @file-selected?
+                [:button.button-primary {:on-click handle-submit} 
+                                        (if @upload-in-progress? "Sending..." "Send")])]
+            [:div.row 
+              [:p.error-message @error-message]]])])))
 
 (defn home-page [] 
   (let [match-model (atom nil)
