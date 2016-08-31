@@ -104,7 +104,12 @@
           [button-link "/signup" "sign up"]])]])
 
 (defn respond-page [match-id challenge-instance-id]
-  (let [challenge-instance-model (atom nil)]
+  (let [challenge-instance-model (atom nil)
+        upload-in-progress (atom false)
+        handle-submit (fn [] 
+                        (when (not @upload-in-progress)
+                          (submit-file match-id challenge-instance-id)
+                          (reset! upload-in-progress true)))]
     (get-challenge-instance challenge-instance-id challenge-instance-model)
     (fn []
       [:div 
@@ -118,7 +123,8 @@
                      :id :file-input 
                      :accept (str (:type @challenge-instance-model) "/*")}] 
             [:p 
-              [:button.button-primary { :on-click #(submit-file match-id challenge-instance-id) } "Send" ]]])])))
+              [:button.button-primary {:on-click handle-submit} 
+                                      (if @upload-in-progress "Sending..." "Send")]]])])))
 
 (defn home-page [] 
   (let [match-model (atom nil)
