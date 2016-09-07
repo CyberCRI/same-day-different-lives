@@ -98,6 +98,14 @@
       [:div.six.columns [:h2 "Same Day"]]
       [:div.six.columns.flip [:h2 "Different Lives"]]]
     [:div.row
+      [:div.two.columns [:a {:href "/"} "Home"]]]])
+
+(defn header-with-login []
+  [:div
+    [:div.row 
+      [:div.six.columns [:h2 "Same Day"]]
+      [:div.six.columns.flip [:h2 "Different Lives"]]]
+    [:div.row
       [:div.two.columns [:a {:href "/"} "Home"]]
       (if @user-model         
         [:div.ten.columns.align-right "You are " [:strong (:pseudo @user-model)] " "
@@ -132,7 +140,7 @@
     (get-challenge-instance challenge-instance-id challenge-instance-model)
     (fn []
       [:div 
-        [header]
+        [header-with-login]
         (if (:error @challenge-instance-model)
           [:p.error-message (str "Error: " (:error @challenge-instance-model))]
           [:div
@@ -156,7 +164,7 @@
     (get-matches all-matches-model)
     (fn [] 
       [:div
-       [header] 
+       [header-with-login] 
        (when @user-model 
         (case (:status @user-model) 
           "dormant" [:div 
@@ -197,7 +205,7 @@
                 false)]
     (fn []
       [:div 
-       [:h2 "Same Day Different Lives"]
+       [header]
        [:h3 "Login"]
        [:form {:on-submit login} 
         [bind-fields 
@@ -228,7 +236,7 @@
                 false)]
     (fn []
       [:div 
-       [:h2 "Same Day Different Lives"]
+       [header]
        [:h3 "Sign up"]
        [:form {:on-submit signup}
          [bind-fields 
@@ -269,7 +277,7 @@
     (get-match-model match-id match-model)
     (fn []
       [:div
-        [header]
+        [header-with-login]
         (if (:error @match-model)
           [:p.error-message (str "Error: " (:error @match-model))]
           (let [{:keys [match challenges]} @match-model
