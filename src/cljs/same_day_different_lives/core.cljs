@@ -85,6 +85,8 @@
 
 (defn format-percent [x] (str (.floor js/Math (* x 100)) "%"))
 
+(defn on-ios? []
+  (re-find #"(iPad|iPhone|iPod)" (.-userAgent js/navigator)))
 
 ;; -------------------------
 ;; Views
@@ -143,19 +145,25 @@
         [header-with-login]
         (if (:error @challenge-instance-model)
           [:p.error-message (str "Error: " (:error @challenge-instance-model))]
-          [:div
-            [:h3 (:description @challenge-instance-model)]
-            [:p (str "Reply with a " (if (= "audio" (:type @challenge-instance-model)) "recording" "picture"))]
-            [:input {:type :file 
-                     :id :file-input 
-                     :accept (str (:type @challenge-instance-model) "/*")
-                     :on-change #(reset! file-selected? (get-selected-file))}] 
-            [:p 
-              (when @file-selected?
-                [:button.button-primary {:on-click handle-submit} 
-                                        (if @upload-in-progress? (str "Sending... " @upload-progress) "Send")])]
-            [:div.row 
-              [:p.error-message @error-message]]])])))
+          ; On iOS, accept videos instead of audio recordings
+          (let [accept-mime-family (if (and (= "audio" (:type @challenge-instance-model)) (on-ios?))
+                                     "video" 
+                                     (:type @challenge-instance-model))]
+            [:div
+              [:h3 (:description @challenge-instance-model)]
+              [:p (str "Reply with a " (if (= "audio" (:type @challenge-instance-model)) "recording" "picture"))]
+              (when (on-ios?)
+               [:p "On iOS, record a video of yourself talking. It will be converted into an audio file."])
+              [:input {:type :file 
+                       :id :file-input 
+                       :accept (str (:type @challenge-instance-model) "/*")
+                       :on-change #(reset! file-selected? (get-selected-file))}] 
+              [:p 
+                (when @file-selected?
+                  [:button.button-primary {:on-click handle-submit} 
+                                          (if @upload-in-progress? (str "Sending... " @upload-progress) "Send")])]
+              [:div.row 
+                [:p.error-message @error-message]]]))])))
 
 (defn home-page [] 
   (let [match-model (atom nil)
