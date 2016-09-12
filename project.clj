@@ -26,7 +26,8 @@
                  [org.postgresql/postgresql "9.4.1208"]
                  [clj-time "0.12.0"]
                  [crypto-password "0.2.0"]
-                 [cljs-http "0.1.41"]]
+                 [cljs-http "0.1.41"]
+                 [http-kit "2.1.18"]]
 
   :plugins [[lein-environ "1.0.2"]
             [lein-cljsbuild "1.1.1"]

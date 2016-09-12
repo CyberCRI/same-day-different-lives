@@ -16,10 +16,39 @@
 
 (defonce user-model (atom nil))
 
+(defonce ws-connection (atom nil))
+
+
+;; -------------------------
+;; Web socket functions
+
+(defn open-ws-connection! []
+ (prn "Attempting to connect websocket...")
+ (if-let [connection (js/WebSocket. (str "ws://" (.-host js/location) "/ws"))]
+   (do
+     (set! (.-onmessage chan) #(prn "got message from server" %1))
+     (reset! ws-connection connection)
+     (prn "Websocket connection established"))
+   (throw (js/Error. "Websocket connection failed!"))))
+
+(defn close-ws-connection! []
+  (when @ws-connection
+    (.close @ws-connection)
+    (reset! ws-connection nil)
+    (prn "Closed websocket connection")))
+           
+(add-watch user-model nil (fn [_ _ old-state new-state]
+                            (cond 
+                              (and (not old-state) new-state) ; Just logged in
+                                (open-ws-connection!)
+                              (and old-state (not new-state)) ; Just logged out
+                                (close-ws-connection!))))
+
 
 ;; -------------------------
 ;; Common functions
 
+           
 (defn check-login []
   (GET "/api/me" 
     {:handler (fn [user-info] (reset! user-model (keywordize-keys user-info)))}))

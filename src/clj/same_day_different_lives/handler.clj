@@ -6,6 +6,7 @@
             [same-day-different-lives.util :as util]
             [same-day-different-lives.config :refer [config]]
             [same-day-different-lives.conversion :refer [convert-file]]
+            [same-day-different-lives.notification :as notification]
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
             [ring.middleware.json :refer [wrap-json-response wrap-json-body]]
@@ -292,6 +293,8 @@
 (def site-routes (apply routes (for [url cljs-urls] (GET url [] loading-page))))
 
 (defroutes api-routes 
+  (GET "/ws" [] (-> notification/ws-handler wrap-require-user))
+  
   (POST "/api/users" [] (-> create-user wrap-keywordize wrap-json-body wrap-json-response))
 
   (GET "/api/me" [] (-> get-user-info wrap-keywordize wrap-require-user wrap-json-body wrap-json-response))
