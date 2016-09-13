@@ -180,7 +180,7 @@
                                      (:type @challenge-instance-model))]
             [:div
               [:h3 (:description @challenge-instance-model)]
-              [:p (str "Reply with a " (if (= "audio" (:type @challenge-instance-model)) "recording" "picture"))]
+              [:p (str "Answer with a " (if (= "audio" (:type @challenge-instance-model)) "recording" "picture"))]
               (when (on-ios?)
                [:p "On iOS, record a video of yourself talking. It will be converted into an audio file."])
               [:input {:type :file 
@@ -328,7 +328,7 @@
              (doall 
                (for [challenge showable-challenges]
                  ^{:key (:challenge-instance-id challenge)} [:div.box.challenge 
-                  [:h4 "Challenge: " [:em (:description challenge)]]
+                  [:h4 "Question: " [:em (:description challenge)]]
                   (when (and (not (responded-to-challenge? challenge)) (active? challenge) (:running match))
                     [:div.row 
                       [:button.button-primary {:on-click #(accountant/navigate! (str "/match/" match-id "/respond/" (:challenge-instance-id challenge)))} "Answer now"]])
@@ -345,8 +345,8 @@
                           [:audio.response-image {:controls true :src (str "/uploads/" (:filename response))}])]]))]))
              [:div.row.section
               (if (and (:running match) (not-empty upcoming-challenges)) 
-                [:h4 (str "Plus " (count upcoming-challenges) " more challenges to come...")]
-                [:h4 "No more challenges to come"])]]))])))
+                [:h4 (str "Plus " (count upcoming-challenges) " more questions to come...")]
+                [:h4 "That's it! No more questions coming."])]]))])))
        
        
 (defn current-page []
