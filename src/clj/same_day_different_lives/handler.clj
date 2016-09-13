@@ -64,18 +64,21 @@
 (defn temp-name [len] 
   (apply str (repeatedly len #(rand-nth "0123456789abcdefghijklmnopqrstuvwxyz"))))
 
-(defn create-file [request]
-  "Returns the name of the created file"
-  (let [{{{tempfile :tempfile content-type :content-type} :file} :params :as params} request
+(defn create-file [file-params challenge-type]
+  "Returns the filename and mime-type of the created file"
+  (let [{:keys [tempfile content-type]} file-params
         [file-category original-extension] (string/split content-type (re-pattern "/"))]
-    (if (and (= file-category "audio") (not= original-extension "mp3"))
+    (prn "For challenge of type " challenge-type ", received file of type" file-category "with extension" original-extension)
+    (if (and (= challenge-type "audio") (not= original-extension "mp3"))
       ; Convert to MP3
       (let [new-filename (str (temp-name 20) ".mp3")]
+        (prn "Converting to MP3.")
         ; TODO: check for failure
         (convert-file (.getPath tempfile) (str "uploads/" new-filename))
         { :filename new-filename :mime-type "audio/mp3"})
       ; No need to convert
-      (let [new-filename (str (temp-name 20) "extension")]
+      (let [new-filename (str (temp-name 20) "." original-extension)]
+        (prn "Copying as-is.")
         (io/copy tempfile (io/file (str "uploads/" new-filename)))
         { :filename new-filename :mime-type content-type}))))
 
@@ -271,19 +274,18 @@
     (make-error-response "Cannot access that challenge instance")
     (response (get-challenge-instance (:challenge-instance-id params)))))
 
-(defn post-challenge-response [request]
-  ; TODO: check that we are allowed to submit
-  (let [{:keys [session params]} request 
-        {:keys [filename mime-type]} (create-file request)]
-    (if-not (can-access-challenge-instance (:user-id session) (:challenge-instance-id params))
-      (make-error-response "Cannot access that challenge instance")
-      (do
+(defn post-challenge-response [{:keys [session params]}]
+  (if-not (can-access-challenge-instance (:user-id session) (:challenge-instance-id params))
+    (make-error-response "Cannot access that challenge instance")
+    
+    (let [challenge-instance (get-challenge-instance (:challenge-instance-id params))
+          {:keys [filename mime-type]} (create-file (:file params) (:type challenge-instance))]   
         (submit-challenge-response 
           (:user-id session) 
           (:challenge-instance-id params) 
           filename 
           mime-type)
-        (response {:filename filename})))))
+        (response {:filename filename}))))
 
 
 ;;; ROUTES
