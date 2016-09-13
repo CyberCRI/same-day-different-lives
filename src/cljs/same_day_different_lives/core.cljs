@@ -18,6 +18,9 @@
 
 (defonce ws-connection (atom nil))
 
+(defonce notifications (atom [{ :id 1 :type :new-response :match-id 51 :challenge-instance-id 355 }
+                              { :id 2 :type :unlocked-challenge :match-id 51 :challenge-instance-id 355 }]))
+
 
 ;; -------------------------
 ;; Web socket functions
@@ -123,13 +126,34 @@
 (defn button-link [href text]
   [:button {:on-click #(accountant/navigate! href)} text])
 
+(defn prepare-notification [notification]
+  (condp = (:type notification)
+    :new-response {:text "The other player has answered the question"
+                   :link (str "/match/" (:match-id notification))}
+    :unlocked-challenge {:text "There's a new question to answer"} ))
+
+(defn remove-notification [notification-id]
+  (swap! notifications (fn [col] (remove #(= (:id %1) notification-id) col))))
+
+(defn alerts []
+  [:div 
+    (for [notification @notifications]
+      (let [prepared-notification (prepare-notification notification)]
+        ^{:key (:id notification)} [:div.row 
+          [:div.twelve.columns.box.alert 
+            [:a {:href (:link prepared-notification) 
+                 :on-click #(remove-notification (:id notification))} 
+             (:text prepared-notification)] 
+            [:a.cancel {:href "" :on-click #(remove-notification (:id notification))} "X"]]]))])
+
 (defn header []
   [:div
     [:div.row 
       [:div.six.columns [:h2 "Same Day"]]
       [:div.six.columns.flip [:h2 "Different Lives"]]]
     [:div.row
-      [:div.two.columns [:a {:href "/"} "Home"]]]])
+      [:div.two.columns [:a {:href "/"} "Home"]]]
+    [alerts]])
 
 (defn header-with-login []
   [:div
@@ -144,7 +168,8 @@
         [:div.ten.columns.align-right "Why not " 
           [button-link "/login" "log in"]
           " or " 
-          [button-link "/signup" "sign up"]])]])
+          [button-link "/signup" "sign up"]])]
+    [alerts]])
 
 (defn respond-page [match-id challenge-instance-id]
   (let [challenge-instance-model (atom nil)
