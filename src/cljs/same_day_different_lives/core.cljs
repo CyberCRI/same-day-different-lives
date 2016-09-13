@@ -223,7 +223,7 @@
            (if (empty? past-matches)
             [:p "No past journals"]
             (for [{:keys [match-id starts_at other-pseudo]} past-matches]
-             [:div.row 
+             ^{:key match-id} [:div.row 
               [:div.six.columns (str starts_at)]
               [:div.six.columns 
                [:a {:href (str "/match/" match-id)} (str "Journal with " other-pseudo)]]]))]))])))
