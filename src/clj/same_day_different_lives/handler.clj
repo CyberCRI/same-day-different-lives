@@ -205,14 +205,15 @@
       (assoc challenge :responses (get-challenge-responses (:challenge-instance-id challenge))))))
 
 (defn get-challenge-instance [challenge-instance-id]
-  (first (jdbc/query db ["select challenge_instances.challenge_instance_id, challenges.challenge_id, challenges.type, challenges.description, challenge_instances.starts_at, challenge_instances.ends_at
+  (first (jdbc/query db ["select challenge_instances.challenge_instance_id, challenges.challenge_id, challenge_instances.match_id, challenges.type, challenges.description, challenge_instances.starts_at, challenge_instances.ends_at
                           from challenge_instances, challenges 
                           where challenges.challenge_id = challenge_instances.challenge_id
                             and challenge_instances.challenge_instance_id = ?"
                           challenge-instance-id]
-           {:row-fn (fn [{:keys [challenge_instance_id challenge_id type description starts_at ends_at]}]
+           {:row-fn (fn [{:keys [challenge_instance_id challenge_id match_id type description starts_at ends_at]}]
                        {:challenge-instance-id challenge_instance_id 
                         :challenge-id challenge_id
+                        :match-id match_id
                         :type type 
                         :description description 
                         :starts-at (.toString starts_at) 
@@ -224,6 +225,19 @@
                                          :filename filename
                                          :mime_type mime-type}))
 
+(defn get-match [match-id]
+  (first (jdbc/query db ["select user_a, user_b, created_at, starts_at, ends_at, running 
+                          from matches
+                          where match_id = ?"
+                      match-id]
+                      {:row-fn (fn [{:keys [user_a user_b created_at starts_at ends_at running]}]
+                                     {:user-a user_a 
+                                      :user-b user_b 
+                                      :created-at (.toString created_at) 
+                                      :starts-at (.toString starts_at) 
+                                      :ends-at (.toString ends_at)
+                                      :running running})})))
+ 
 (defn get-match-info [match-id]
   (let [match (first (jdbc/query db ["select user_a, user_b, created_at, starts_at, ends_at, running 
                                       from matches
@@ -279,12 +293,18 @@
     (make-error-response "Cannot access that challenge instance")
     
     (let [challenge-instance (get-challenge-instance (:challenge-instance-id params))
+          match (get-match (:match-id challenge-instance))
+          other-user-id (util/find-first-other [(:user-a match) (:user-b match)] (:user-id session))
           {:keys [filename mime-type]} (create-file (:file params) (:type challenge-instance))]   
         (submit-challenge-response 
           (:user-id session) 
           (:challenge-instance-id params) 
           filename 
           mime-type)
+        (notification/send! other-user-id 
+                            {:type :new-response 
+                             :match-id (:match-id challenge-instance) 
+                             :challenge-instance-id (:challenge-instance-id params)})
         (response {:filename filename}))))
 
 

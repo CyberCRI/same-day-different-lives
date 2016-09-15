@@ -9,7 +9,8 @@
               [clojure.string :as string]
               [clojure.walk :refer [keywordize-keys stringify-keys]]
               [cljs-http.client :as http]
-              [cljs.core.async :refer [<! chan]]))
+              [cljs.core.async :refer [<! chan]]
+              [clojure.walk :as walk]))
 
 ;; -------------------------
 ;; Data
@@ -18,18 +19,37 @@
 
 (defonce ws-connection (atom nil))
 
-(defonce notifications (atom [{ :id 1 :type :new-response :match-id 51 :challenge-instance-id 355 }
-                              { :id 2 :type :unlocked-challenge :match-id 51 :challenge-instance-id 355 }]))
+(defonce notifications (atom []))
 
 
 ;; -------------------------
 ;; Web socket functions
 
+(defn make-id [] 
+  (let [id (atom 0)
+        old-id @id]
+    (swap! id inc)
+    old-id))
+
+(defn parse-json [json]
+  (js->clj (.parse js/JSON json)))
+
 (defn open-ws-connection! []
  (prn "Attempting to connect websocket...")
  (if-let [connection (js/WebSocket. (str "ws://" (.-host js/location) "/ws"))]
    (do
-     (set! (.-onmessage chan) #(prn "got message from server" %1))
+     (set! (.-onmessage connection) (fn [e]
+                                (prn "got notification from server" (.-data e))
+                                (let [notification (-> e
+                                                       .-data 
+                                                       parse-json
+                                                       walk/keywordize-keys
+                                                       ; Turn :type value into a keyword
+                                                       (update :type keyword) 
+                                                       ; Assign arbitrary ID
+                                                       (assoc :id (make-id)))]
+                                  ; Add to list
+                                  (swap! notifications conj notification))))
      (reset! ws-connection connection)
      (prn "Websocket connection established"))
    (throw (js/Error. "Websocket connection failed!"))))
@@ -45,7 +65,9 @@
                               (and (not old-state) new-state) ; Just logged in
                                 (open-ws-connection!)
                               (and old-state (not new-state)) ; Just logged out
-                                (close-ws-connection!))))
+                                (do 
+                                  (close-ws-connection!)
+                                  (reset! notifications [])))))
 
 
 ;; -------------------------
