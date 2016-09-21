@@ -152,7 +152,12 @@
   (condp = (:type notification)
     :new-response {:text "The other player has answered the question"
                    :link (str "/match/" (:match-id notification))}
-    :unlocked-challenge {:text "There's a new question to answer"} ))
+    :unlocked-challenge {:text "There's a new question to answer"
+                         :link (str "/match/" (:match-id notification))} 
+    :ended-match {:text "Your journal has ended"
+                  :link (str "/match/" (:match-id notification))}
+    :created-match {:text "You have been paired up to make a new journal"
+                    :link (str "/match/" (:match-id notification))}))
 
 (defn remove-notification [notification-id]
   (swap! notifications (fn [col] (remove #(= (:id %1) notification-id) col))))

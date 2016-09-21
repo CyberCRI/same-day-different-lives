@@ -16,7 +16,11 @@
 ; Notifications look like:
 ; { :type :new-response :match-id 51 :challenge-instance-id 355 }
 ; { :type :unlocked-challenge :match-id 51 :challenge-instance-id 355 }
-
+; The types are: 
+;   :new-response
+;   :unlocked-challenge
+;   :created-match
+;   :ended-match
 
 (defn user-is-connected? [user-id] (contains? @users-to-channels user-id))
 

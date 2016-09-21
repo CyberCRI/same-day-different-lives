@@ -1,6 +1,7 @@
 (ns same-day-different-lives.worker
   (:require [clojure.core.async :refer [<! timeout chan go]]
             [same-day-different-lives.config :refer [config]]
+            [same-day-different-lives.notification :as notification]
             [clojure.java.jdbc :as jdbc]
             [clj-time.jdbc]
             [clj-time.core :as t]
@@ -44,7 +45,12 @@
         (doseq-indexed [challenge selected-challenges offset]
           (jdbc/insert! db :challenge_instances {:challenge_id challenge :match_id match-id
                                                  :starts_at (t/plus (t/now) (t/days offset))
-                                                 :ends_at (t/plus (t/now) (t/days (inc offset)))})))
+                                                 :ends_at (t/plus (t/now) (t/days (inc offset)))}))
+        ; Send notifications
+        (doseq [user-id [user-a user-b]]
+          (notification/send! user-id 
+                              {:type :created-match 
+                               :match-id match-id})))
 
       ; Change user statuses
       (jdbc/update! db :users { :status "playing" } ["user_id in (?, ?)" user-a user-b]))))
@@ -62,7 +68,12 @@
       ; Set match to expired
       (jdbc/update! db :matches {:running false} ["match_id = ?" match-id])
       ; Change user statuses
-      (jdbc/update! db :users { :status "ready" } ["user_id in (?, ?)" user-a user-b]))))
+      (jdbc/update! db :users { :status "ready" } ["user_id in (?, ?)" user-a user-b])
+      ; Send notifications
+      (doseq [user-id [user-a user-b]]
+        (notification/send! user-id 
+                            {:type :ended-match 
+                             :match-id match-id})))))
 
 (defn run-worker [] 
   (prn "worker started") 

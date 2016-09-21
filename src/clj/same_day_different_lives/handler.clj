@@ -139,11 +139,16 @@
     (when (not= (:status new-user) (:status user))
       ; Stop any matches going on
       (when-let [{:keys [match-id user-a user-b]} (get-active-match-for-user (:user-id user))]
-        ; Set match to stopped
-        (prn "stopping match" match-id "for users" user-a user-b "by request of user" (:user-id user))
-        (jdbc/update! db :matches {:running false} ["match_id = ?" match-id])
-        ; Change other user's status
-        (jdbc/update! db :users { :status "ready" } ["user_id = ?" (util/find-first-other [user-a user-b] (:user-id user))])))
+        (let [other-user-id (util/find-first-other [user-a user-b] (:user-id user))]
+          ; Set match to stopped
+          (prn "stopping match" match-id "for users" user-a user-b "by request of user" (:user-id user))
+          (jdbc/update! db :matches {:running false} ["match_id = ?" match-id])
+          ; Change other user's status
+          (jdbc/update! db :users { :status "ready" } ["user_id = ?" other-user-id])
+          ; Send notification to other user
+          (notification/send! other-user-id 
+                              {:type :ended-match
+                               :match-id match-id}))))
     (jdbc/execute! db ["update users set pseudo = ?, status = cast(? as user_status) where user_id = ?" 
                        (:pseudo new-user) (:status new-user) (:user-id new-user)])
     (-> (response new-user))))
