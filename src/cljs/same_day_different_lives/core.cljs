@@ -22,53 +22,6 @@
 (defonce notifications (atom []))
 
 
-;; -------------------------
-;; Web socket functions
-
-(defn make-id [] 
-  (let [id (atom 0)
-        old-id @id]
-    (swap! id inc)
-    old-id))
-
-(defn parse-json [json]
-  (js->clj (.parse js/JSON json)))
-
-(defn open-ws-connection! []
- (prn "Attempting to connect websocket...")
- (if-let [connection (js/WebSocket. (str "ws://" (.-host js/location) "/ws"))]
-   (do
-     (set! (.-onmessage connection) (fn [e]
-                                (prn "got notification from server" (.-data e))
-                                (let [notification (-> e
-                                                       .-data 
-                                                       parse-json
-                                                       walk/keywordize-keys
-                                                       ; Turn :type value into a keyword
-                                                       (update :type keyword) 
-                                                       ; Assign arbitrary ID
-                                                       (assoc :id (make-id)))]
-                                  ; Add to list
-                                  (swap! notifications conj notification))))
-     (reset! ws-connection connection)
-     (prn "Websocket connection established"))
-   (throw (js/Error. "Websocket connection failed!"))))
-
-(defn close-ws-connection! []
-  (when @ws-connection
-    (.close @ws-connection)
-    (reset! ws-connection nil)
-    (prn "Closed websocket connection")))
-           
-(add-watch user-model nil (fn [_ _ old-state new-state]
-                            (cond 
-                              (and (not old-state) new-state) ; Just logged in
-                                (open-ws-connection!)
-                              (and old-state (not new-state)) ; Just logged out
-                                (do 
-                                  (close-ws-connection!)
-                                  (reset! notifications [])))))
-
 
 ;; -------------------------
 ;; Common functions
@@ -157,7 +110,8 @@
     :ended-match {:text "Your journal has ended"
                   :link (str "/match/" (:match-id notification))}
     :created-match {:text "You have been paired up to make a new journal"
-                    :link (str "/match/" (:match-id notification))}))
+                    :link (str "/match/" (:match-id notification))}
+    (prn "ERROR unknown notification type" (:type notification))))
 
 (defn remove-notification [notification-id]
   (swap! notifications (fn [col] (remove #(= (:id %1) notification-id) col))))
@@ -407,7 +361,6 @@
       [:div page]      
       [:div [page]])))
 
-
 ;; -------------------------
 ;; Routes
 
@@ -425,6 +378,60 @@
 
 (secretary/defroute "/match/:match-id/respond/:challenge-instance-id" [match-id challenge-instance-id]
   (session/put! :current-page [#'respond-page match-id challenge-instance-id]))
+
+
+;; -------------------------
+;; Web socket functions
+
+(def make-id-count (atom 0))
+(defn make-id [] 
+  (let [old-id @make-id-count]
+    (swap! make-id-count inc)
+    old-id))
+
+(defn parse-json [json]
+  (js->clj (.parse js/JSON json)))
+
+(defn parse-notification [event]
+  (-> event
+   .-data 
+   parse-json
+   walk/keywordize-keys
+   ; Turn :type value into a keyword
+   (update :type keyword) 
+   ; Assign arbitrary ID
+   (assoc :id (make-id))))
+
+(defn open-ws-connection! []
+ (prn "Attempting to connect websocket...")
+ (if-let [connection (js/WebSocket. (str "ws://" (.-host js/location) "/ws"))]
+   (do
+     (set! (.-onmessage connection) (fn [e]
+                                (prn "got notification from server" (.-data e))
+                                (let [notification (parse-notification e)]
+                                  ; Add to list
+                                  (swap! notifications conj notification)
+                                  ; If a match has created or ended, reload the user-model
+                                  (when (contains? #{:created-match :ended-match} (:type notification))
+                                     (check-login)))))
+     (reset! ws-connection connection)
+     (prn "Websocket connection established"))
+   (throw (js/Error. "Websocket connection failed!"))))
+
+(defn close-ws-connection! []
+  (when @ws-connection
+    (.close @ws-connection)
+    (reset! ws-connection nil)
+    (prn "Closed websocket connection")))
+           
+(add-watch user-model nil (fn [_ _ old-state new-state]
+                            (cond 
+                              (and (not old-state) new-state) ; Just logged in
+                                (open-ws-connection!)
+                              (and old-state (not new-state)) ; Just logged out
+                                (do 
+                                  (close-ws-connection!)
+                                  (reset! notifications [])))))
 
 
 
