@@ -59,5 +59,6 @@ CREATE TABLE challenge_responses (
 	user_id int references users(user_id),
 	filename text,
 	mime_type text,
+	caption text,
 	created_at timestamp default current_timestamp
 );

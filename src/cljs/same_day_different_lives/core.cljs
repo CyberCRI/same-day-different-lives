@@ -78,12 +78,13 @@
 
 (defn get-selected-file [] (aget (.getElementById js/document "file-input") "files" 0))
 
-(defn submit-file [match-id challenge-instance-id] 
+(defn submit-file [match-id challenge-instance-id caption] 
   "Returns [response-chan progress-chan]"
+  (prn "caption =" caption)
   (let [file (get-selected-file)
         progress-chan (chan)
         response-chan (http/post (str "/api/challenge-instance/" challenge-instance-id)
-                                  {:multipart-params [["file" file]]
+                                  {:multipart-params [["file" file] ["caption" caption]]
                                    :progress progress-chan})]
     [response-chan progress-chan]))
 
@@ -154,6 +155,7 @@
 
 (defn respond-page [match-id challenge-instance-id]
   (let [challenge-instance-model (atom nil)
+        fields (atom {})
         file-selected? (atom false)
         upload-in-progress? (atom false)
         upload-progress (atom nil)
@@ -161,7 +163,7 @@
         handle-submit (fn [] 
                         (when (not @upload-in-progress?)
                           (reset! upload-in-progress? true)
-                          (let [[response-chan progress-chan] (submit-file match-id challenge-instance-id)]
+                          (let [[response-chan progress-chan] (submit-file match-id challenge-instance-id (:caption @fields))]
                             (go 
                               (while @upload-in-progress?
                                 (let [[v ch] (alts! [response-chan progress-chan])]
@@ -189,10 +191,15 @@
               [:p (str "Answer with a " (if (= "audio" (:type @challenge-instance-model)) "recording" "picture"))]
               (when (on-ios?)
                [:p "On iOS, record a video of yourself talking. It will be converted into an audio file."])
-              [:input {:type :file 
-                       :id :file-input 
-                       :accept (str (:type @challenge-instance-model) "/*")
-                       :on-change #(reset! file-selected? (get-selected-file))}] 
+              [:div.row
+                [:input {:type :file 
+                         :id :file-input 
+                         :accept (str (:type @challenge-instance-model) "/*")
+                         :on-change #(reset! file-selected? (get-selected-file))}]] 
+              [bind-fields
+                [:div.row
+                  [:input {:field :text :id :caption :placeholder "Caption (optional)"}]] 
+                fields]                
               [:p 
                 (when @file-selected?
                   [:button.button-primary {:on-click handle-submit} 
@@ -342,13 +349,17 @@
                     [:div.row
                      [:p "No one has answered"]]
                     (for [response (:responses challenge)]
-                      ^{:key (:challenge-response-id response)} [:div.row 
-                       [:div {:class "two columns"} 
-                        [:div.header (:user response)]]
-                       [:div {:class "ten columns"}
-                        (if (= "image" (:type challenge))
-                          [:img.response-image {:src (str "/uploads/" (:filename response))}]
-                          [:audio.response-image {:controls true :src (str "/uploads/" (:filename response))}])]]))]))
+                      ^{:key (:challenge-response-id response)} 
+                      [:div.response-container
+                        [:div.row 
+                         [:div {:class "two columns"} 
+                          [:div.header (:user response)]]
+                         [:div {:class "ten columns"}
+                          (if (= "image" (:type challenge))
+                            [:img.response-image {:src (str "/uploads/" (:filename response))}]
+                            [:audio.response-image {:controls true :src (str "/uploads/" (:filename response))}])]]
+                        [:div.row 
+                         [:div.twelve.columns.caption (:caption response)]]]))]))
              [:div.row.section
               (if (and (:running match) (not-empty upcoming-challenges)) 
                 [:h4 (str "Plus " (count upcoming-challenges) " more questions to come...")]

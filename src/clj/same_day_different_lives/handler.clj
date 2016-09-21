@@ -180,16 +180,17 @@
         {:challenge-instance-id challenge_instance_id :type type :description description}))
 
 (defn get-challenge-responses [challenge-instance-id]
-  (jdbc/query db ["select challenge_response_id, users.pseudo, challenge_responses.filename, challenge_responses.mime_type, challenge_responses.created_at 
+  (jdbc/query db ["select challenge_response_id, users.pseudo, challenge_responses.filename, challenge_responses.mime_type, challenge_responses.caption, challenge_responses.created_at 
                   from challenge_responses, users 
                   where challenge_responses.user_id = users.user_id
                     and challenge_instance_id = ?"
                   challenge-instance-id]
-              {:row-fn (fn [{:keys [challenge_response_id pseudo filename mime_type created_at]}]
+              {:row-fn (fn [{:keys [challenge_response_id pseudo filename mime_type caption created_at]}]
                         {:challenge-response-id challenge_response_id
                          :user pseudo 
                          :filename filename 
                          :mime-type mime_type 
+                         :caption caption
                          :created-at (.toString created_at)})}))
 
 (defn get-challenges-in-match [match-id]
@@ -224,11 +225,12 @@
                         :starts-at (.toString starts_at) 
                         :ends-at (.toString ends_at)})})))
 
-(defn submit-challenge-response [user-id challenge-instance-id filename mime-type]
+(defn submit-challenge-response [user-id challenge-instance-id filename mime-type caption]
   (jdbc/insert! db :challenge_responses {:user_id user-id 
                                          :challenge_instance_id challenge-instance-id
                                          :filename filename
-                                         :mime_type mime-type}))
+                                         :mime_type mime-type
+                                         :caption caption}))
 
 (defn get-match [match-id]
   (first (jdbc/query db ["select user_a, user_b, created_at, starts_at, ends_at, running 
@@ -305,7 +307,8 @@
           (:user-id session) 
           (:challenge-instance-id params) 
           filename 
-          mime-type)
+          mime-type
+          (:caption params))
         (notification/send! other-user-id 
                             {:type :new-response 
                              :match-id (:match-id challenge-instance) 

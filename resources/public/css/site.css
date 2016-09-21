@@ -53,3 +53,11 @@
   color: white;
   text-decoration: none;
 }
+
+.caption {
+  font-style: italic;
+}
+
+.response-container {
+  margin-top: 20px;
+}
