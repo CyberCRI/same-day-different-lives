@@ -1,5 +1,5 @@
 (ns same-day-different-lives.core
-    (:require-macros [cljs.core.async.macros :refer [go]])
+    (:require-macros [cljs.core.async.macros :refer [go go-loop]])
     (:require [reagent.core :as reagent :refer [atom create-class]]
               [reagent.session :as session]
               [secretary.core :as secretary :include-macros true]
@@ -9,7 +9,7 @@
               [clojure.string :as string]
               [clojure.walk :refer [keywordize-keys stringify-keys]]
               [cljs-http.client :as http]
-              [cljs.core.async :refer [<! chan]]
+              [cljs.core.async :refer [<! >! chan mult tap untap]]
               [clojure.walk :as walk]))
 
 ;; -------------------------
@@ -21,6 +21,9 @@
 
 (defonce notifications (atom []))
 
+(defonce notification-chan (chan))
+
+(defonce notification-mult (mult notification-chan))
 
 
 ;; -------------------------
@@ -208,38 +211,50 @@
                 [:p.error-message @error-message]]]))])))
 
 (defn home-page [] 
-  (let [match-model (atom nil)
-        all-matches-model (atom nil)]
-    (get-active-match match-model)
-    (get-matches all-matches-model)
-    (fn [] 
-      [:div
-       [header-with-login] 
-       (when @user-model 
-        (case (:status @user-model) 
-          "dormant" [:div 
-                     [:p "Do you want to play?"]
-                     [:p [:button.button-primary { :on-click #(change-state "ready") } "Find a match" ]]]
-          "ready"   [:div 
-                     [:p "Waiting for the game to find a match for you"]
-                     [:p [:button { :on-click #(change-state "dormant") } "I don't want to play anymore" ]]]
-          "playing" [:div
-                     [:p "You are currently playing"]
-                     (when @match-model 
-                       [:p 
-                         [:button.button-primary {:on-click #(accountant/navigate! (str "/match/" (:match-id @match-model)))} "Go to your shared journal"]])
-                     [:p [:button { :on-click (fn [] (confirm #(change-state "dormant") "Are you sure you want to stop?"))} "Stop playing" ]]]))
-       (when @all-matches-model
-        (let [past-matches (filter #(not (:running %1)) @all-matches-model)]
-          [:div 
-           [:h3 "Past Journals"]
-           (if (empty? past-matches)
-            [:p "No past journals"]
-            (for [{:keys [match-id starts_at other-pseudo]} past-matches]
-             ^{:key match-id} [:div.row 
-              [:div.six.columns (str starts_at)]
-              [:div.six.columns 
-               [:a {:href (str "/match/" match-id)} (str "Journal with " other-pseudo)]]]))]))])))
+  (let [local-notif-chan (chan)
+        match-model (atom nil)
+        all-matches-model (atom nil)
+        load-data (fn [] 
+                    (get-active-match match-model)
+                    (get-matches all-matches-model))]
+    (load-data)
+    (tap notification-mult local-notif-chan)
+    (go-loop []
+      (let [notification (<! local-notif-chan)]
+        ; Reload
+        (prn "Reloading due to notification")
+        (load-data)))
+    (create-class 
+      {:component-will-unmount #(untap notification-mult local-notif-chan)
+       :reagent-render
+        (fn [] 
+          [:div
+           [header-with-login] 
+           (when @user-model 
+            (case (:status @user-model) 
+              "dormant" [:div 
+                         [:p "Do you want to play?"]
+                         [:p [:button.button-primary { :on-click #(change-state "ready") } "Find a match" ]]]
+              "ready"   [:div 
+                         [:p "Waiting for the game to find a match for you"]
+                         [:p [:button { :on-click #(change-state "dormant") } "I don't want to play anymore" ]]]
+              "playing" [:div
+                         [:p "You are currently playing"]
+                         (when @match-model 
+                           [:p 
+                             [:button.button-primary {:on-click #(accountant/navigate! (str "/match/" (:match-id @match-model)))} "Go to your shared journal"]])
+                         [:p [:button { :on-click (fn [] (confirm #(change-state "dormant") "Are you sure you want to stop?"))} "Stop playing" ]]]))
+           (when @all-matches-model
+            (let [past-matches (filter #(not (:running %1)) @all-matches-model)]
+              [:div 
+               [:h3 "Past Journals"]
+               (if (empty? past-matches)
+                [:p "No past journals"]
+                (for [{:keys [match-id starts_at other-pseudo]} past-matches]
+                 ^{:key match-id} [:div.row 
+                  [:div.six.columns (str starts_at)]
+                  [:div.six.columns 
+                   [:a {:href (str "/match/" match-id)} (str "Journal with " other-pseudo)]]]))]))])})))
 
 (defn login-page [] 
   (let [fields (atom {})
@@ -323,47 +338,58 @@
     (not-empty (filter #(= (:user %) (:pseudo @user-model)) responses))))
 
 (defn match-page [match-id]
-  (let [match-model (atom nil)]
-    (get-match-model match-id match-model)
-    (fn []
-      [:div
-        [header-with-login]
-        (if (:error @match-model)
-          [:p.error-message (str "Error: " (:error @match-model))]
-          (let [{:keys [match challenges]} @match-model
-                other-pseudo (find-first-other [(:user-a match) (:user-b match)] 
-                                               (:pseudo @user-model))
-                showable-challenges (filter #(< (to-ms (:starts-at %)) (js/Date.now)) challenges)
-                upcoming-challenges (filter #(> (to-ms (:starts-at %)) (js/Date.now)) challenges)] 
-            [:div 
-             [:h3 (str "Journal with " other-pseudo)]
-             [:p (str "This journal is " (if (:running match) "going on now" "over"))]
-             (doall 
-               (for [challenge showable-challenges]
-                 ^{:key (:challenge-instance-id challenge)} [:div.box.challenge 
-                  [:h4 "Question: " [:em (:description challenge)]]
-                  (when (and (not (responded-to-challenge? challenge)) (active? challenge) (:running match))
-                    [:div.row 
-                      [:button.button-primary {:on-click #(accountant/navigate! (str "/match/" match-id "/respond/" (:challenge-instance-id challenge)))} "Answer now"]])
-                  (if (empty? (:responses challenge))
-                    [:div.row
-                     [:p "No one has answered"]]
-                    (for [response (:responses challenge)]
-                      ^{:key (:challenge-response-id response)} 
-                      [:div.response-container
+  (let [local-notif-chan (chan)
+        match-model (atom nil)
+        load-data (fn [] (get-match-model match-id match-model))]
+    (load-data)
+    (tap notification-mult local-notif-chan)
+    (go-loop []
+      (let [notification (<! local-notif-chan)]
+        ; Reload
+        (prn "Reloading due to notification")
+        (load-data)))
+    (create-class 
+      {:component-will-unmount #(untap notification-mult local-notif-chan)
+       :reagent-render
+        (fn []
+          [:div
+            [header-with-login]
+            (if (:error @match-model)
+              [:p.error-message (str "Error: " (:error @match-model))]
+              (let [{:keys [match challenges]} @match-model
+                    other-pseudo (find-first-other [(:user-a match) (:user-b match)] 
+                                                   (:pseudo @user-model))
+                    showable-challenges (filter #(< (to-ms (:starts-at %)) (js/Date.now)) challenges)
+                    upcoming-challenges (filter #(> (to-ms (:starts-at %)) (js/Date.now)) challenges)] 
+                [:div 
+                 [:h3 (str "Journal with " other-pseudo)]
+                 [:p (str "This journal is " (if (:running match) "going on now" "over"))]
+                 (doall 
+                   (for [challenge showable-challenges]
+                     ^{:key (:challenge-instance-id challenge)} [:div.box.challenge 
+                      [:h4 "Question: " [:em (:description challenge)]]
+                      (when (and (not (responded-to-challenge? challenge)) (active? challenge) (:running match))
                         [:div.row 
-                         [:div {:class "two columns"} 
-                          [:div.header (:user response)]]
-                         [:div {:class "ten columns"}
-                          (if (= "image" (:type challenge))
-                            [:img.response-image {:src (str "/uploads/" (:filename response))}]
-                            [:audio.response-image {:controls true :src (str "/uploads/" (:filename response))}])]]
-                        [:div.row 
-                         [:div.twelve.columns.caption (:caption response)]]]))]))
-             [:div.row.section
-              (if (and (:running match) (not-empty upcoming-challenges)) 
-                [:h4 (str "Plus " (count upcoming-challenges) " more questions to come...")]
-                [:h4 "That's it! No more questions coming."])]]))])))
+                          [:button.button-primary {:on-click #(accountant/navigate! (str "/match/" match-id "/respond/" (:challenge-instance-id challenge)))} "Answer now"]])
+                      (if (empty? (:responses challenge))
+                        [:div.row
+                         [:p "No one has answered"]]
+                        (for [response (:responses challenge)]
+                          ^{:key (:challenge-response-id response)} 
+                          [:div.response-container
+                            [:div.row 
+                             [:div {:class "two columns"} 
+                              [:div.header (:user response)]]
+                             [:div {:class "ten columns"}
+                              (if (= "image" (:type challenge))
+                                [:img.response-image {:src (str "/uploads/" (:filename response))}]
+                                [:audio.response-image {:controls true :src (str "/uploads/" (:filename response))}])]]
+                            [:div.row 
+                             [:div.twelve.columns.caption (:caption response)]]]))]))
+                 [:div.row.section
+                  (if (and (:running match) (not-empty upcoming-challenges)) 
+                    [:h4 (str "Plus " (count upcoming-challenges) " more questions to come...")]
+                    [:h4 "That's it! No more questions coming."])]]))])})))
        
        
 (defn current-page []
@@ -420,6 +446,9 @@
      (set! (.-onmessage connection) (fn [e]
                                 (prn "got notification from server" (.-data e))
                                 (let [notification (parse-notification e)]
+                                  ; Add to notifications
+                                  (go 
+                                    (>! notification-chan notification))
                                   ; Add to list
                                   (swap! notifications conj notification)
                                   ; If a match has created or ended, reload the user-model
