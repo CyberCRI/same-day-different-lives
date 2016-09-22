@@ -10,7 +10,8 @@
               [clojure.walk :refer [keywordize-keys stringify-keys]]
               [cljs-http.client :as http]
               [cljs.core.async :refer [<! >! chan mult tap untap]]
-              [clojure.walk :as walk]))
+              [clojure.walk :as walk]
+              [cljsjs.moment]))
 
 ;; -------------------------
 ;; Data
@@ -251,7 +252,7 @@
                 [:p "No past journals"]
                 (for [{:keys [match-id starts_at other-pseudo]} past-matches]
                  ^{:key match-id} [:div.row 
-                  [:div.six.columns (str starts_at)]
+                  [:div.six.columns (str "Started " (-> (js/moment (str starts_at)) (.format "MMMM Do YYYY")))]
                   [:div.six.columns 
                    [:a {:href (str "/match/" match-id)} (str "Journal with " other-pseudo)]]]))]))])})))
 
@@ -326,6 +327,8 @@
 
 (defn to-ms [date-string] (.getTime (new js/Date date-string)))
 
+(defn format-from-now [date] (.fromNow (js/moment date)))
+
 (defn active? [challenge]
   (let [{:keys [starts-at ends-at]} challenge]
     (and 
@@ -367,11 +370,16 @@
                   [:img {:src @lightbox-img}]]
                  
                  [:h3 (str "Journal with " other-pseudo)]
-                 [:p (str "This journal is " (if (:running match) "going on now" "over"))]
+                 [:p (str "This journal started " (format-from-now (:starts-at match)) 
+                          (if (:running match) " and ends " " and ended ")            
+                          (format-from-now (:ends-at match)) ".")]     
                  (doall 
                    (for [challenge showable-challenges]
                      ^{:key (:challenge-instance-id challenge)} [:div.box.challenge 
                       [:h4 "Question: " [:em (:description challenge)]]
+                      [:div.row [:p (-> (js/moment (:starts-at challenge)) (.format "MMMM Do YYYY"))]]
+                      (when (and (:running match) (active? challenge)) 
+                        [:div.row [:p (str "This question ends " (format-from-now (:ends-at challenge)))]])
                       (when (and (not (responded-to-challenge? challenge)) (active? challenge) (:running match))
                         [:div.row 
                           [:button.button-primary {:on-click #(accountant/navigate! (str "/match/" match-id "/respond/" (:challenge-instance-id challenge)))} "Answer now"]])
@@ -382,9 +390,9 @@
                           ^{:key (:challenge-response-id response)} 
                           [:div.response-container
                             [:div.row 
-                             [:div {:class "two columns"} 
+                             [:div.two.columns 
                               [:div.header (:user response)]]
-                             [:div {:class "ten columns"}
+                             [:div.ten.columns.centered 
                               (if (= "image" (:type challenge))
                                 [:img.response-image {:src (str "/uploads/" (:filename response)) 
                                                       :on-click #(reset! lightbox-img (str "/uploads/" (:filename response)))}]

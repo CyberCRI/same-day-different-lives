@@ -98,3 +98,7 @@ input.caption {
   max-height: 80%;
   margin-top: 2%;
 }
+
+.centered {
+  text-align: center;
+}
