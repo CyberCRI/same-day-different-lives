@@ -57,6 +57,10 @@
   text-decoration: none;
 }
 
+input.caption {
+  width: 100%;
+}
+
 .caption {
   font-style: italic;
 }

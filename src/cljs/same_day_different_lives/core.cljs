@@ -200,7 +200,7 @@
                          :on-change #(reset! file-selected? (get-selected-file))}]] 
               [bind-fields
                 [:div.row
-                  [:input {:field :text :id :caption :placeholder "Caption (optional)"}]] 
+                  [:input.caption {:field :text :id :caption :placeholder "Caption (optional)"}]] 
                 fields]                
               [:p 
                 (when @file-selected?
