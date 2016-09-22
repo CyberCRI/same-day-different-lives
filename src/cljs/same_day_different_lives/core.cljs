@@ -83,11 +83,10 @@
 
 (defn submit-file [match-id challenge-instance-id caption] 
   "Returns [response-chan progress-chan]"
-  (prn "caption =" caption)
   (let [file (get-selected-file)
         progress-chan (chan)
         response-chan (http/post (str "/api/challenge-instance/" challenge-instance-id)
-                                  {:multipart-params [["file" file] ["caption" caption]]
+                                  {:multipart-params [["file" file] ["caption" (or caption "")]]
                                    :progress progress-chan})]
     [response-chan progress-chan]))
 
@@ -384,8 +383,9 @@
                               (if (= "image" (:type challenge))
                                 [:img.response-image {:src (str "/uploads/" (:filename response))}]
                                 [:audio.response-image {:controls true :src (str "/uploads/" (:filename response))}])]]
-                            [:div.row 
-                             [:div.twelve.columns.caption (:caption response)]]]))]))
+                            (if-let [caption (:caption response)] 
+                              [:div.row 
+                                [:div.twelve.columns.caption caption]])]))]))
                  [:div.row.section
                   (if (and (:running match) (not-empty upcoming-challenges)) 
                     [:h4 (str "Plus " (count upcoming-challenges) " more questions to come...")]
