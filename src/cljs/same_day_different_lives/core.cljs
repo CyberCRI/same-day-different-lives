@@ -339,7 +339,8 @@
 (defn match-page [match-id]
   (let [local-notif-chan (chan)
         match-model (atom nil)
-        load-data (fn [] (get-match-model match-id match-model))]
+        load-data (fn [] (get-match-model match-id match-model))
+        lightbox-img (atom nil)]
     (load-data)
     (tap notification-mult local-notif-chan)
     (go-loop []
@@ -361,6 +362,10 @@
                     showable-challenges (filter #(< (to-ms (:starts-at %)) (js/Date.now)) challenges)
                     upcoming-challenges (filter #(> (to-ms (:starts-at %)) (js/Date.now)) challenges)] 
                 [:div 
+                 ; Lightbox (only visible when lightbox-img contains a value)
+                 [:div.lightbox {:class (if @lightbox-img "visible" nil) :on-click #(reset! lightbox-img nil)}
+                  [:img {:src @lightbox-img}]]
+                 
                  [:h3 (str "Journal with " other-pseudo)]
                  [:p (str "This journal is " (if (:running match) "going on now" "over"))]
                  (doall 
@@ -381,7 +386,8 @@
                               [:div.header (:user response)]]
                              [:div {:class "ten columns"}
                               (if (= "image" (:type challenge))
-                                [:img.response-image {:src (str "/uploads/" (:filename response))}]
+                                [:img.response-image {:src (str "/uploads/" (:filename response)) 
+                                                      :on-click #(reset! lightbox-img (str "/uploads/" (:filename response)))}]
                                 [:audio.response-image {:controls true :src (str "/uploads/" (:filename response))}])]]
                             (if-let [caption (:caption response)] 
                               [:div.row 
