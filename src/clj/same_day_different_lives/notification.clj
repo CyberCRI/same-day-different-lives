@@ -1,11 +1,15 @@
 (ns same-day-different-lives.notification
   (:require [org.httpkit.server :as httpkit]
             [clojure.data.json :as json]
-            [same-day-different-lives.config :refer [config]]))
+            [same-day-different-lives.config :refer [config]]
+            [clojure.java.jdbc :as jdbc]
+            [postal.core :refer [send-message]]))
 
 
 ;; -------------------------
 ;;; Data
+
+(def db (merge (:db config) { :stringtype "unspecified" }))
 
 (def users-to-channels (atom {}))
 
@@ -44,30 +48,40 @@
 
 (defn prepare-email [notification]
   (condp = (:type notification)
-    :new-response {:text "The other player has answered the question."
+    :new-response {:text "The other player has answered the question"
                    :link (str "/match/" (:match-id notification))}
-    :unlocked-challenge {:text "There's a new question to answer."
+    :unlocked-challenge {:text "here's a new question to answer"
                          :link (str "/match/" (:match-id notification))} 
-    :ended-match {:text "Your journal has ended."
+    :ended-match {:text "Your journal has ended"
                   :link (str "/match/" (:match-id notification))}
-    :created-match {:text "You have been paired up to make a new journal."
+    :created-match {:text "You have been paired up to make a new journal"
                     :link (str "/match/" (:match-id notification))}
     (throw  (Error. (str "ERROR unknown notification type" (:type notification))))))
 
-(defn make-email-body [email-fields]
-  (str "Hello Same Day Different Lives player, \n\n"
-       (:text email-fields) "\n\n"
-       "Go to " (get-in config [:email :link-prefix] " to find out more.\n\n")
+(defn make-email-body [email-fields user-info]
+  (str "Hello " (:pseudo user-info) ", \n\n"
+       (:text email-fields) " on Same Day Different Lives.\n\n"
+       "Go to " (get-in config [:email :link-prefix]) (:link email-fields) " to find out more.\n\n"
        "Yours truly,\n"
        "The SDDL Robot"))
 
+(defn find-user-info [user-id]
+  "Returns :email and :pseudo"
+  (first (jdbc/query db ["select email, pseudo from users
+                          where user_id = ?
+                          limit 1" 
+                          user-id])))
+
 (defn send-by-email! [user-id notification]
-  ; TODO: actually send email :)
-  (prn "Sending mail to " user-id ": " notification)
   (let [email-fields (prepare-email notification)
-        email-body (make-email-body email-fields)]
-    ; TODO: actually send email
-    ))
+        user-info (find-user-info user-id)
+        email-body (make-email-body email-fields user-info)]
+    (prn "Sending mail to " user-info ": " email-body)
+    (send-message (get-in config [:email :server]) 
+                  {:from (get-in config [:email :from])
+                   :to (str (:pseudo user-info) "<" (:email user-info) ">")
+                   :subject (:text email-fields)
+                   :body email-body})))
 
 
 (defn send! [user-id notification]
