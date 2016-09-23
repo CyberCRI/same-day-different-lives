@@ -3,4 +3,10 @@
       :dbname "same-day-different-lives"
       ; :username ""
       ; :password "" 
-      }}
+      } 
+ :email {:link-prefix "http://..."
+         :from "Same Day Different Lives Robot <...>"
+         :server {:host ""
+                  :user ""
+                  :pass ""
+                  :ssl true}}}
