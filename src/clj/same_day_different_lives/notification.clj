@@ -50,7 +50,7 @@
   (condp = (:type notification)
     :new-response {:text "The other player has answered the question"
                    :link (str "/match/" (:match-id notification))}
-    :unlocked-challenge {:text "here's a new question to answer"
+    :unlocked-challenge {:text "There's a new question to answer"
                          :link (str "/match/" (:match-id notification))} 
     :ended-match {:text "Your journal has ended"
                   :link (str "/match/" (:match-id notification))}

@@ -67,6 +67,8 @@
       (prn "expiring match " match-id)
       ; Set match to expired
       (jdbc/update! db :matches {:running false} ["match_id = ?" match-id])
+      ; Set challenge instances to expired
+      (jdbc/update! db :challenge_instances {:status "over"} ["match_id = ?" match-id])
       ; Change user statuses
       (jdbc/update! db :users { :status "ready" } ["user_id in (?, ?)" user-a user-b])
       ; Send notifications
@@ -75,10 +77,41 @@
                             {:type :ended-match 
                              :match-id match-id})))))
 
+(defn unlock-challenge-instances [] 
+  "Look for challenge instances that have just begun, and unlock them"
+  (let [unlocked-challenge-instances (jdbc/query db ["select matches.match_id, matches.user_a, matches.user_b, challenge_instances.challenge_instance_id 
+                                                    from matches, challenge_instances
+                                                    where challenge_instances.match_id = matches.match_id 
+                                                      and matches.running
+                                                      and challenge_instances.status = 'upcoming'
+                                                      and challenge_instances.starts_at < now()
+                                                      and challenge_instances.ends_at > now()"]
+                                                {:row-fn (fn [{:keys [match_id user_a user_b challenge_instance_id]}]
+                                                           {:match-id match_id :user-a user_a :user-b user_b :challenge-instance-id challenge_instance_id})})]
+    (doseq [{:keys [match-id user-a user-b challenge-instance-id]} unlocked-challenge-instances]
+      (prn "unlocking challenge instance " challenge-instance-id)
+      ; Set challenge instance to active
+      (jdbc/update! db :challenge_instances {:status "active"} ["challenge_instance_id = ?" challenge-instance-id])
+      ; Send notifications
+      (doseq [user-id [user-a user-b]]
+        (notification/send! user-id 
+                            {:type :unlocked-challenge 
+                             :match-id match-id
+                             :challenge-instance-id challenge-instance-id})))))
+
+(defn expire-challenge-instances [] 
+  "Look for challenge instances that are over, and expire them"
+  (jdbc/execute! db ["update challenge_instances
+                     set status = 'over'
+                     where status != 'over'
+                      and ends_at < now()"]))
+
 (defn run-worker [] 
   (prn "worker started") 
   (go
     (while true
       (<! (timeout 1000))
       (expire-matches)
+      (expire-challenge-instances)
+      (unlock-challenge-instances)
       (pair-users))))

@@ -42,6 +42,9 @@ CREATE TABLE matches (
 	running boolean default TRUE
 );
 
+DROP TYPE IF EXISTS challenge_instance_status CASCADE;
+CREATE TYPE challenge_instance_status AS ENUM ('upcoming', 'active', 'over');
+
 DROP TABLE IF EXISTS challenge_instances CASCADE;
 CREATE TABLE challenge_instances (
 	challenge_instance_id serial primary key,
@@ -49,7 +52,8 @@ CREATE TABLE challenge_instances (
 	match_id int references matches(match_id),
 	created_at timestamp default current_timestamp,
 	starts_at timestamp,
-	ends_at timestamp
+	ends_at timestamp,
+	status challenge_instance_status default 'upcoming'
 );
 
 DROP TABLE IF EXISTS challenge_responses CASCADE;
