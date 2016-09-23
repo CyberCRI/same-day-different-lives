@@ -80,7 +80,7 @@
     (send-message (get-in config [:email :server]) 
                   {:from (get-in config [:email :from])
                    :to (str (:pseudo user-info) "<" (:email user-info) ">")
-                   :subject (:text email-fields)
+                   :subject (str "SDDL - " (:text email-fields))
                    :body email-body})))
 
 
