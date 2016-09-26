@@ -1,0 +1,12 @@
+[Unit]
+Description=Same Day Different Lives
+After=postgresql.service
+
+[Service]
+User=same-day-different-lives
+WorkingDirectory=/home/jesse/same-day-different-lives
+Environment=PORT=3040
+ExecStart=/usr/bin/java -jar same-day-different-lives.jar
+
+[Install]
+WantedBy=multi-user.target

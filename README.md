@@ -46,21 +46,9 @@ sudo -u same-day-different-lives PORT=3040 java -jar same-day-different-lives.ja
 ```
 
 
-### Example Nginx configuration
+### Deploying
 
-Notice that this configuration removes the limit on client request sizes.
+Check out the `deploy` folder for an example nginx configuration. Notice that this configuration removes the limit on client request sizes. 
 
-```
-server {
-       listen 80;
-       listen [::]:80;
-
-       server_name sddl.crigamelab.org;
-
-       location / {
-               client_max_body_size 0;
-               proxy_pass http://localhost:3040/;
-       }
-}
-```
+The `deploy` folder also includes an example systemd configuration. 
 
