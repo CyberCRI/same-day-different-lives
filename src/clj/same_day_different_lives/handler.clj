@@ -11,8 +11,6 @@
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
             [ring.middleware.json :refer [wrap-json-response wrap-json-body]]
             [ring.middleware.defaults :refer [site-defaults api-defaults wrap-defaults]]
-            [ring.middleware.session :refer [wrap-session]]
-            [ring.middleware.session.cookie :refer [cookie-store]]
             [ring.util.response :refer [response status content-type]]
             [clojure.java.jdbc :as jdbc]
             [clojure.edn :as edn]
@@ -350,7 +348,10 @@
 
 ;;; APP
 
+(def one-year (* 60 60 24 7 52))
+
 (def app (wrap-middleware all-routes
                           (-> site-defaults
                             (assoc-in [:security :anti-forgery] false)
-                            (assoc :proxy (or (:behind-proxy? config) false)))))
+                            (assoc :proxy (or (:behind-proxy? config) false))
+                            (assoc-in [:session :cookie-attrs] {:max-age one-year}))))
