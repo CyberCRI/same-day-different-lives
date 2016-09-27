@@ -350,4 +350,7 @@
 
 ;;; APP
 
-(def app (wrap-middleware all-routes (assoc-in site-defaults [:security :anti-forgery] false)))
+(def app (wrap-middleware all-routes
+                          (-> site-defaults
+                            (assoc-in [:security :anti-forgery] false)
+                            (assoc :proxy (or (:behind-proxy? config) false)))))

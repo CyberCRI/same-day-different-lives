@@ -4,6 +4,7 @@
       ; :username ""
       ; :password "" 
       } 
+ :behind-proxy? ; true or false
  :email {:link-prefix "http://..."
          :from "Same Day Different Lives Robot <...>"
          :server {:host ""
