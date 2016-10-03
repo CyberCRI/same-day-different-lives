@@ -20,6 +20,59 @@ INSERT INTO challenges (type, description) VALUES
 DROP TYPE IF EXISTS user_status CASCADE;
 CREATE TYPE user_status AS ENUM ('dormant', 'ready', 'playing', 'banned');
 
+DROP TYPE IF EXISTS user_gender CASCADE;
+CREATE TYPE user_gender AS ENUM ('male', 'female', 'other');
+
+DROP TABLE IF EXISTS religion CASCADE;
+CREATE TABLE religion (
+	religion_id int primary key,
+	religion_name text
+);
+INSERT INTO religion (religion_id, religion_name) VALUES
+	(0, 'None'),
+	(1, 'Other'),
+	(2, 'Hinduism'),
+	(3, 'Islam'),
+	(4, 'Christianity'),
+	(5, 'Sikhism'),
+	(6, 'Buddhism'),
+	(7, 'Jainism'),
+	(8, 'Judaism'); -- not a major religion in India, but elsewhere
+
+DROP TABLE IF EXISTS region CASCADE;
+CREATE TABLE region (
+	region_id int primary key,
+	region_name text
+);
+INSERT INTO region (region_id, region_name) VALUES
+	(1, 'Other'),
+	(2, 'East India'),
+	(3, 'North India'),
+	(4, 'Northeast India'),
+	(5, 'South India'),
+	(6, 'Western India'),
+	(7, 'Islands of India');
+
+DROP TABLE IF EXISTS education_level CASCADE;
+CREATE TABLE education_level (
+	education_level_id int primary key,
+	education_level_name text 
+);
+INSERT INTO education_level (education_level_id, education_level_name) VALUES
+	(0, 'None'),
+	(1, 'Other'),
+	(2, 'Primary school'),
+	(3, 'High school'),
+	(4, 'University'),
+	(5, 'Masters degree'),
+	(6, 'Doctoral degree');
+
+DROP TYPE IF EXISTS user_skin_color CASCADE;
+CREATE TYPE user_skin_color AS ENUM ('dark', 'in-between', 'light');
+
+DROP TYPE IF EXISTS political_position CASCADE;
+CREATE TYPE political_position AS ENUM ('liberal', 'moderate', 'conservative');
+
 DROP TABLE IF EXISTS users CASCADE;
 CREATE TABLE users (
 	user_id serial primary key,
@@ -27,8 +80,18 @@ CREATE TABLE users (
 	email text unique,
 	password text, -- encrypted
 	status user_status default 'dormant',
-	created_at timestamp default current_timestamp
-	-- TODO: demographic information
+	created_at timestamp default current_timestamp,
+
+	-- Demographics: 
+	gender user_gender,
+	birth_year int,
+	religion_id int references religion(religion_id),
+	region_id int references region(region_id),
+	skin_color user_skin_color,
+	education_level_id education_level,
+	politics_social political_position,
+	politics_economics political_position
+	-- TODO: Other possible criteria include language, ethnicity, caste, class / wealth 
 );
 
 DROP TABLE IF EXISTS matches CASCADE;

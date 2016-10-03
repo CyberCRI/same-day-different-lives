@@ -7,6 +7,7 @@
             [same-day-different-lives.config :refer [config]]
             [same-day-different-lives.conversion :refer [convert-file]]
             [same-day-different-lives.notification :as notification]
+            [same-day-different-lives.model :as model]
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
             [ring.middleware.json :refer [wrap-json-response wrap-json-body]]
@@ -80,12 +81,16 @@
         (io/copy tempfile (io/file (str "uploads/" new-filename)))
         { :filename new-filename :mime-type content-type}))))
 
+(def demographic-fields [:gender :birth-year :religion-id :region-id :skin-color :education-level :politics-social :politics-economics])
+
 (defn create-user [request]
   (let [{:keys [pseudo email password]} (:body request)]
    (if-not (and pseudo email password) 
      (make-error-response "Pseudo, email, and password are required")
-     (do
-      (jdbc/insert! db :users { :pseudo pseudo :email email :password (password/encrypt password) })
+     (let [demographic-values (model/transform-keys-to-db-keywords (select-keys (:body request) demographic-fields))]
+      ; (prn "received demographic-values" demographic-values)
+      (jdbc/insert! db :users (merge {:pseudo pseudo :email email :password (password/encrypt password)}
+                                     demographic-values))
       (response {})))))
 
 (defn login [request]

@@ -287,6 +287,12 @@
        [:div.row 
         [:p.error-message @error-message]]]])))
 
+; (defn make-select-box [id option-map]
+;   [:select.u-full-width {:field :list :id id :required true}
+;    [:option]
+;    (for [[k v] option-map]
+;      [:option {:key k} v])])
+
 (defn signup-page [] 
   (let [fields (atom {})
         error-message (atom nil)
@@ -319,7 +325,15 @@
               [:input.u-full-width {:field :password :id :password :required true}]]
              [:div.six.columns
               [:label {:for "password2"} "Confirm password"] 
-              [:input.u-full-width {:field :password :id :password2 :required true}]]]]
+              [:input.u-full-width {:field :password :id :password2 :required true}]]]
+            [:div.row
+             [:div.six.columns
+              [:label {:for "gender"} "Gender"] 
+              [:select.u-full-width {:field :list :id :gender :required true }
+               [:option]
+               [:option {:key "female"} "Female"]
+               [:option {:key "male"} "Male"]
+               [:option {:key "other"} "Other"]]]]]
           fields]
          [:p 
           [:input.button-primary {:type :submit :value "Sign up"}]]
