@@ -287,16 +287,17 @@
        [:div.row 
         [:p.error-message @error-message]]]])))
 
-; (defn make-select-box [id option-map]
-;   [:select.u-full-width {:field :list :id id :required true}
-;    [:option]
-;    (for [[k v] option-map]
-;      [:option {:key k} v])])
+(defn make-select-box [id option-map]
+  ; concat is needed here to "splice" the dynamic options in the :select vector 
+  (concat [:select.u-full-width {:field :list :id id :required true }]
+   [[:option]]
+   (for [[k v] option-map]
+     ^{:key k} [:option {:key k} v])))
 
 (defn signup-page [] 
   (let [fields (atom {})
         error-message (atom nil)
-        signup (fn [] 
+        signup (fn [e] 
                 (if (not= (:password @fields) (:password2 @fields))
                   (reset! error-message "Passwords don't match")
                   (POST "/api/users" 
@@ -304,7 +305,7 @@
                      :format :json 
                      :handler #(accountant/navigate! "/login")
                      :error-handler #(reset! error-message "Could not sign up")}))
-                false)]
+                (.preventDefault e))]
     (fn []
       [:div 
        [header]
@@ -329,11 +330,7 @@
             [:div.row
              [:div.six.columns
               [:label {:for "gender"} "Gender"] 
-              [:select.u-full-width {:field :list :id :gender :required true }
-               [:option]
-               [:option {:key "female"} "Female"]
-               [:option {:key "male"} "Male"]
-               [:option {:key "other"} "Other"]]]]]
+              (make-select-box :gender {:male "Male" :female "Female" :other "Other"})]]]
           fields]
          [:p 
           [:input.button-primary {:type :submit :value "Sign up"}]]
