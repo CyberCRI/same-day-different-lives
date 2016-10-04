@@ -21,7 +21,8 @@
             [crypto.password.pbkdf2 :as password]
             [clj-time.jdbc]
             [clj-time.core :as t]
-            [clj-time.coerce :as tc]))
+            [clj-time.coerce :as tc])
+  (:import (java.util Calendar)))
 
 (def db (merge (:db config) { :stringtype "unspecified" }))
 
@@ -81,7 +82,7 @@
         (io/copy tempfile (io/file (str "uploads/" new-filename)))
         { :filename new-filename :mime-type content-type}))))
 
-(def demographic-fields [:gender :birth-year :religion-id :region-id :skin-color :education-level :politics-social :politics-economics])
+(def demographic-fields [:gender :birth-year :religion-id :region-id :skin-color :education-level-id :politics-social :politics-economics])
 
 (defn create-user [request]
   (let [{:keys [pseudo email password]} (:body request)]
@@ -319,6 +320,12 @@
         (response {:filename filename}))))
 
 
+(defn obtain-religions [request] (response (model/list-religions)))
+
+(defn obtain-regions [request] (response (model/list-regions)))
+
+(defn obtain-education-levels [request] (response (model/list-education-levels)))
+
 ;;; ROUTES
 
 (def cljs-urls ["/" "/record" "/login" "/signup" "/match/:match-id" "/match/:match-id/respond/:challenge-instance-id"])
@@ -341,8 +348,12 @@
   (POST "/api/challenge-instance/:challenge-instance-id" [] (-> post-challenge-response wrap-require-user wrap-multipart-params wrap-params wrap-json-response))
   
   (POST "/api/login" [] (-> login wrap-json-body wrap-json-response))
-  (POST "/api/logout" [] (-> logout wrap-keywordize wrap-json-body wrap-json-response wrap-require-user)))
-
+  (POST "/api/logout" [] (-> logout wrap-keywordize wrap-json-body wrap-json-response wrap-require-user))
+  
+  (GET "/api/religions" [] (-> obtain-religions wrap-json-body wrap-json-response))
+  (GET "/api/regions" [] (-> obtain-regions wrap-json-body wrap-json-response))
+  (GET "/api/educationLevels" [] (-> obtain-education-levels wrap-json-body wrap-json-response)))
+  
 (defroutes other-routes
   (files "/uploads" {:root "uploads"})
   (resources "/")

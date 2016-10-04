@@ -290,51 +290,95 @@
 (defn make-select-box [id option-map]
   ; concat is needed here to "splice" the dynamic options in the :select vector 
   (concat [:select.u-full-width {:field :list :id id :required true }]
-   [[:option]]
+   ^{:key 0} [[:option]]
    (for [[k v] option-map]
      ^{:key k} [:option {:key k} v])))
 
 (defn signup-page [] 
   (let [fields (atom {})
+        religions (atom nil)
+        regions (atom nil)
+        education-levels (atom nil)
         error-message (atom nil)
         signup (fn [e] 
-                (if (not= (:password @fields) (:password2 @fields))
+                (if (not= (:password @fields) (:password2 @fields)) 
                   (reset! error-message "Passwords don't match")
                   (POST "/api/users" 
                     {:params @fields 
                      :format :json 
                      :handler #(accountant/navigate! "/login")
-                     :error-handler #(reset! error-message "Could not sign up")}))
+                     :error-handler #(reset! error-message (str "Could not sign up. " (:response %1)))}))
                 (.preventDefault e))]
+    (go 
+      (let [religion-list (:body (<! (http/get "/api/religions")))
+            religion-map (reduce #(assoc %1 (:religion-id %2) (:religion-name %2)) {} religion-list)]
+        (reset! religions religion-map)))
+    (go 
+      (let [region-list (:body (<! (http/get "/api/regions")))
+            region-map (reduce #(assoc %1 (:region-id %2) (:region-name %2)) {} region-list)]
+        (reset! regions region-map)))
+    (go 
+      (let [education-level-list (:body (<! (http/get "/api/educationLevels")))
+            education-level-map (reduce #(assoc %1 (:education-level-id %2) (:education-level-name %2)) {} education-level-list)]
+        (reset! education-levels education-level-map)))
     (fn []
       [:div 
        [header]
        [:h3 "Sign up"]
-       [:form {:on-submit signup}
-         [bind-fields 
-          [:div 
-            [:div.row
-             [:div.six.columns
-              [:label {:for "email"} "Email (kept private)"] 
-              [:input.u-full-width {:field :email :id :email :required true}]] 
-             [:div.six.columns
-              [:label {:for "pseudo"} "Pseudonyme (this will be shown to others)"] 
-              [:input.u-full-width {:field :text :id :pseudo :required true}]]] 
-            [:div.row
-             [:div.six.columns
-              [:label {:for "password"} "Password"] 
-              [:input.u-full-width {:field :password :id :password :required true}]]
-             [:div.six.columns
-              [:label {:for "password2"} "Confirm password"] 
-              [:input.u-full-width {:field :password :id :password2 :required true}]]]
-            [:div.row
-             [:div.six.columns
-              [:label {:for "gender"} "Gender"] 
-              (make-select-box :gender {:male "Male" :female "Female" :other "Other"})]]]
-          fields]
-         [:p 
-          [:input.button-primary {:type :submit :value "Sign up"}]]
-         [:p.error-message @error-message]]])))
+       (if-not (and @religions @regions @education-levels)   
+         [:div "Loading..."]
+         [:form {:on-submit signup}
+           [bind-fields 
+            [:div 
+              [:div.row
+               [:div.six.columns
+                [:label {:for "email"} "Email (kept private)"] 
+                [:input.u-full-width {:field :email :id :email :required true}]] 
+               [:div.six.columns
+                [:label {:for "pseudo"} "Pseudonyme (this will be shown to others)"] 
+                [:input.u-full-width {:field :text :id :pseudo :required true}]]] 
+              [:div.row
+               [:div.six.columns
+                [:label {:for "password"} "Password"] 
+                [:input.u-full-width {:field :password :id :password :required true}]]
+               [:div.six.columns
+                [:label {:for "password2"} "Confirm password"] 
+                [:input.u-full-width {:field :password :id :password2 :required true}]]]
+              [:div.row
+               [:h4.u-full-width "About you"]
+               [:p.u-full-width "This information is used to pair you up with other people."]]
+              [:div.row
+               [:div.six.columns
+                [:label {:for "gender"} "Gender"] 
+                (make-select-box :gender {:male "Male" :female "Female" :other "Other"})]
+               [:div.six.columns
+                [:label {:for "birth-year"} "Year of birth"] 
+                [:input.u-full-width {:field :numeric :type :number :id :birth-year :required true :min 1900 :max (.getFullYear (js/Date.))}]]]
+              [:div.row
+               [:div.six.columns
+                [:label {:for "religion"} "Religion"] 
+                (make-select-box :religion-id @religions)]
+               [:div.six.columns
+                [:label {:for "regions"} "Region"] 
+                (make-select-box :region-id @regions)]]           
+              [:div.row
+               [:div.six.columns
+                [:label {:for "skin-color"} "Skin color"] 
+                (make-select-box :skin-color {:dark "Dark" :in-between "In Between" :light "Light"})]
+               [:div.six.columns
+                [:label {:for "regions"} "Education level"] 
+                (make-select-box :education-level-id @education-levels)]]           
+              [:div.row
+               [:div.six.columns
+                [:label {:for "politics-social"} "Politics on a social dimension"] 
+                (make-select-box :politics-social {:liberal "Liberal" :moderate "Moderate" :conservative "Conservative"})]
+               [:div.six.columns
+                [:label {:for "regions"} "Politics on a political dimension"] 
+                (make-select-box :politics-economics {:liberal "Liberal" :moderate "Moderate" :conservative "Conservative"})]]]
+            fields]
+           [:p 
+            [:input.button-primary {:type :submit :value "Sign up"}]]
+           [:p.error-message @error-message]])])))
 
 (defn to-ms [date-string] (.getTime (new js/Date date-string)))
 
