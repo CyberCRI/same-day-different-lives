@@ -287,12 +287,16 @@
        [:div.row 
         [:p.error-message @error-message]]]])))
 
-(defn make-select-box [id option-map]
+(defn make-select-box [id option-pairs]
   ; concat is needed here to "splice" the dynamic options in the :select vector 
   (concat [:select.u-full-width {:field :list :id id :required true }]
    ^{:key 0} [[:option]]
-   (for [[k v] option-map]
+   (for [[k v] option-pairs]
      ^{:key k} [:option {:key k} v])))
+
+(defn put-other-at-end [list-of-pairs]
+  "Re-order list to put the one with value 'Other' (key = 1) at the end"
+  (sort (fn [[k1 _] [k2 _]] (if (= k1 1) 1 (if (= k2 1) -1 0))) list-of-pairs))
 
 (defn signup-page [] 
   (let [fields (atom {})
@@ -311,16 +315,16 @@
                 (.preventDefault e))]
     (go 
       (let [religion-list (:body (<! (http/get "/api/religions")))
-            religion-map (reduce #(assoc %1 (:religion-id %2) (:religion-name %2)) {} religion-list)]
-        (reset! religions religion-map)))
+            religion-pairs (for [religion religion-list] [(:religion-id religion) (:religion-name religion)])]
+        (reset! religions (put-other-at-end religion-pairs))))
     (go 
       (let [region-list (:body (<! (http/get "/api/regions")))
-            region-map (reduce #(assoc %1 (:region-id %2) (:region-name %2)) {} region-list)]
-        (reset! regions region-map)))
+            region-pairs (for [region region-list] [(:region-id region) (:region-name region)])]
+        (reset! regions (put-other-at-end region-pairs))))
     (go 
       (let [education-level-list (:body (<! (http/get "/api/educationLevels")))
-            education-level-map (reduce #(assoc %1 (:education-level-id %2) (:education-level-name %2)) {} education-level-list)]
-        (reset! education-levels education-level-map)))
+            education-level-pairs (for [education-level education-level-list] [(:education-level-id education-level) (:education-level-name education-level)])]
+        (reset! education-levels (put-other-at-end education-level-pairs))))
     (fn []
       [:div 
        [header]
