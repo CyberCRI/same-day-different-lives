@@ -326,6 +326,14 @@
 
 (defn obtain-education-levels [request] (response (model/list-education-levels)))
 
+(defn post-quiz-response [{:keys [session params body]}]
+  (if-not (can-access-match (:user-id session) (:match-id params))
+    (make-error-response "Cannot access that match")
+    (do
+      (model/submit-quiz-response (merge body {:match-id (:match-id params) :user-id (:user-id session)}))
+      (response {}))))
+
+
 ;;; ROUTES
 
 (def cljs-urls ["/" "/record" "/login" "/signup" "/match/:match-id" "/match/:match-id/respond/:challenge-instance-id"])
@@ -352,7 +360,9 @@
   
   (GET "/api/religions" [] (-> obtain-religions wrap-json-body wrap-json-response))
   (GET "/api/regions" [] (-> obtain-regions wrap-json-body wrap-json-response))
-  (GET "/api/educationLevels" [] (-> obtain-education-levels wrap-json-body wrap-json-response)))
+  (GET "/api/educationLevels" [] (-> obtain-education-levels wrap-json-body wrap-json-response))
+
+  (POST "/api/quiz/:match-id" [] (-> post-quiz-response wrap-require-user wrap-json-body wrap-json-response)))
   
 (defroutes other-routes
   (files "/uploads" {:root "uploads"})

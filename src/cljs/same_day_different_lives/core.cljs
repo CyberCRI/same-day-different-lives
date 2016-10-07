@@ -408,7 +408,8 @@
         match-model (atom nil)
         load-data (fn [] (get-match-model match-id match-model))
         lightbox-img (atom nil)
-        data-lists (atom nil)]
+        data-lists (atom nil)
+        quiz-response (atom nil)]
     (load-data)
     (tap notification-mult local-notif-chan)
     (go-loop []
@@ -444,7 +445,17 @@
                    (if-not @data-lists
                      [:p "Loading..."]
                      (let [form-data (atom {})
-                           make-guess (fn [] (prn "Making guess" @form-data))]
+                           error-message (atom nil)
+                           response-in-progress (atom false)
+                           make-guess (fn [] 
+                                        (when-not @response-in-progress
+                                          (reset! response-in-progress true)
+                                          (go
+                                            (let [response (<! (http/post (str "/api/quiz/" match-id) {:json-params @form-data}))]
+                                              (if (= :no-error (:error-code response))
+                                                (reset! quiz-response @form-data) 
+                                                (reset! error-message (:body response)))
+                                              (reset! response-in-progress false)))))]
                        [:div 
                         [:h4 "Quiz"]
                         [:p "Try to guess the demographic information about your journal partner."]
@@ -482,7 +493,8 @@
                         [:div.row 
                          [:div.six.columns
                           [:button.button-primary {:on-click make-guess} "Make your guess"]]]
-                       ])))
+                        [:div.row 
+                          [:p.error-message @error-message]]])))
                  (doall 
                    (for [challenge showable-challenges]
                      ^{:key (:challenge-instance-id challenge)} [:div.box.challenge 

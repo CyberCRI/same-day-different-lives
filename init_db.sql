@@ -20,8 +20,8 @@ INSERT INTO challenges (type, description) VALUES
 DROP TYPE IF EXISTS user_status CASCADE;
 CREATE TYPE user_status AS ENUM ('dormant', 'ready', 'playing', 'banned');
 
-DROP TYPE IF EXISTS user_gender CASCADE;
-CREATE TYPE user_gender AS ENUM ('male', 'female', 'other');
+DROP TYPE IF EXISTS gender CASCADE;
+CREATE TYPE gender AS ENUM ('male', 'female', 'other');
 
 DROP TABLE IF EXISTS religion CASCADE;
 CREATE TABLE religion (
@@ -67,8 +67,8 @@ INSERT INTO education_level (education_level_id, education_level_name) VALUES
 	(5, 'Masters degree'),
 	(6, 'Doctoral degree');
 
-DROP TYPE IF EXISTS user_skin_color CASCADE;
-CREATE TYPE user_skin_color AS ENUM ('dark', 'in-between', 'light');
+DROP TYPE IF EXISTS skin_color CASCADE;
+CREATE TYPE skin_color AS ENUM ('dark', 'in-between', 'light');
 
 DROP TYPE IF EXISTS political_position CASCADE;
 CREATE TYPE political_position AS ENUM ('liberal', 'moderate', 'conservative');
@@ -83,11 +83,11 @@ CREATE TABLE users (
 	created_at timestamp not null default current_timestamp,
 
 	-- Demographics: 
-	gender user_gender not null,
+	gender gender not null,
 	birth_year int not null,
 	religion_id int not null references religion(religion_id),
 	region_id int not null references region(region_id),
-	skin_color user_skin_color not null,
+	skin_color skin_color not null,
 	education_level_id int not null references education_level(education_level_id),
 	politics_social political_position not null,
 	politics_economics political_position not null
@@ -132,4 +132,20 @@ CREATE TABLE challenge_responses (
 	mime_type text not null,
 	caption text not null,
 	created_at timestamp not null default current_timestamp
+);
+
+DROP TABLE IF EXISTS quiz_responses CASCADE;
+CREATE TABLE quiz_responses (
+	quiz_response_id serial primary key,
+	user_id int not null references users(user_id),
+	match_id int not null references matches(match_id),
+
+	gender gender,
+	birth_year int,
+	religion_id int references religion(religion_id),
+	region_id int references region(region_id),
+	skin_color skin_color,
+	education_level_id int references education_level(education_level_id),
+	politics_social political_position,
+	politics_economics political_position
 );

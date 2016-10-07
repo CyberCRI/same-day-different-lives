@@ -52,3 +52,6 @@
                   from education_level
                   order by education_level_id"]
                  {:row-fn transform-keys-to-clojure-keywords}))
+
+(defn submit-quiz-response [values-map] 
+  (jdbc/insert! db :quiz_responses (transform-keys-to-db-keywords values-map)))
