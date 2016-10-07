@@ -123,7 +123,7 @@
 (defn get-active-match-for-user [user-id]
   (first (jdbc/query db ["select match_id, user_a, user_b 
                           from matches 
-                          where running 
+                          where status != 'over' 
                             and (user_a = ? or user_b = ?)"
                           user-id user-id]
           {:row-fn (fn [{:keys [match_id user_a user_b]}] {:match-id match_id :user-a user_a :user-b user_b})})))
@@ -146,7 +146,7 @@
         (let [other-user-id (util/find-first-other [user-a user-b] (:user-id user))]
           ; Set match to stopped
           (prn "stopping match" match-id "for users" user-a user-b "by request of user" (:user-id user))
-          (jdbc/update! db :matches {:running false} ["match_id = ?" match-id])
+          (jdbc/update! db :matches {:status "over"} ["match_id = ?" match-id])
           ; Change other user's status
           (jdbc/update! db :users { :status "ready" } ["user_id = ?" other-user-id])
           ; Send notification to other user
@@ -163,12 +163,12 @@
 
 
 (defn get-matches-for-user [user-id]
-  (let [matches (jdbc/query db ["select match_id, user_a, user_b, running, starts_at
+  (let [matches (jdbc/query db ["select match_id, user_a, user_b, status, starts_at
                                 from matches 
                                 where(user_a = ? or user_b = ?)
                                 order by starts_at DESC"
                                 user-id user-id]
-                {:row-fn (fn [{:keys [match_id user_a user_b running starts_at]}] {:match-id match_id :user-a user_a :user-b user_b :running running :starts_at (.toString starts_at)})})]
+                {:row-fn (fn [{:keys [match_id user_a user_b status starts_at]}] {:match-id match_id :user-a user_a :user-b user_b :status status :starts_at (.toString starts_at)})})]
     (for [match matches] 
       (assoc match :other-pseudo (get-user-pseudo (util/find-first-other [(:user-a match) (:user-b match)] user-id))))))
 
@@ -237,30 +237,30 @@
                                          :caption caption}))
 
 (defn get-match [match-id]
-  (first (jdbc/query db ["select user_a, user_b, created_at, starts_at, ends_at, running 
+  (first (jdbc/query db ["select user_a, user_b, created_at, starts_at, ends_at, status 
                           from matches
                           where match_id = ?"
                       match-id]
-                      {:row-fn (fn [{:keys [user_a user_b created_at starts_at ends_at running]}]
+                      {:row-fn (fn [{:keys [user_a user_b created_at starts_at ends_at status]}]
                                      {:user-a user_a 
                                       :user-b user_b 
                                       :created-at (.toString created_at) 
                                       :starts-at (.toString starts_at) 
                                       :ends-at (.toString ends_at)
-                                      :running running})})))
+                                      :status status})})))
  
 (defn get-match-info [match-id]
-  (let [match (first (jdbc/query db ["select user_a, user_b, created_at, starts_at, ends_at, running 
+  (let [match (first (jdbc/query db ["select user_a, user_b, created_at, starts_at, ends_at, status 
                                       from matches
                                       where match_id = ?"
                               match-id]
-                          {:row-fn (fn [{:keys [user_a user_b created_at starts_at ends_at running]}]
+                          {:row-fn (fn [{:keys [user_a user_b created_at starts_at ends_at status]}]
                                          {:user-a user_a 
                                           :user-b user_b 
                                           :created-at (.toString created_at) 
                                           :starts-at (.toString starts_at) 
                                           :ends-at (.toString ends_at)
-                                          :running running})}))
+                                          :status status})}))
         pseudo-a (get-user-pseudo (:user-a match))
         pseudo-b (get-user-pseudo (:user-b match))]
     (assoc match :user-a pseudo-a :user-b pseudo-b)))

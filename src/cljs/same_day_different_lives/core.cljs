@@ -1,6 +1,7 @@
 (ns same-day-different-lives.core
     (:require-macros [cljs.core.async.macros :refer [go go-loop]])
-    (:require [reagent.core :as reagent :refer [atom create-class]]
+    (:require [same-day-different-lives.util :as util]
+              [reagent.core :as reagent :refer [atom create-class]]
               [reagent.session :as session]
               [secretary.core :as secretary :include-macros true]
               [accountant.core :as accountant]
@@ -9,7 +10,7 @@
               [clojure.string :as string]
               [clojure.walk :refer [keywordize-keys stringify-keys]]
               [cljs-http.client :as http]
-              [cljs.core.async :refer [<! >! chan mult tap untap]]
+              [cljs.core.async :refer [<! >! chan mult tap untap promise-chan]]
               [clojure.walk :as walk]
               [cljsjs.moment]))
 
@@ -111,6 +112,8 @@
                    :link (str "/match/" (:match-id notification))}
     :unlocked-challenge {:text "There's a new question to answer"
                          :link (str "/match/" (:match-id notification))} 
+    :unlocked-quiz {:text "Time to play a quiz"
+                    :link (str "/match/" (:match-id notification))} 
     :ended-match {:text "Your journal has ended"
                   :link (str "/match/" (:match-id notification))}
     :created-match {:text "You have been paired up to make a new journal"
@@ -245,7 +248,7 @@
                              [:button.button-primary {:on-click #(accountant/navigate! (str "/match/" (:match-id @match-model)))} "Go to your shared journal"]])
                          [:p [:button { :on-click (fn [] (confirm #(change-state "dormant") "Are you sure you want to stop?"))} "Stop playing" ]]]))
            (when @all-matches-model
-            (let [past-matches (filter #(not (:running %1)) @all-matches-model)]
+            (let [past-matches (filter #(= (:status %1) "over") @all-matches-model)]
               [:div 
                [:h3 "Past Journals"]
                (if (empty? past-matches)
@@ -298,11 +301,23 @@
   "Re-order list to put the one with value 'Other' (key = 1) at the end"
   (sort (fn [[k1 _] [k2 _]] (if (= k1 1) 1 (if (= k2 1) -1 0))) list-of-pairs))
 
+(defn get-lists []
+  "Returns a promise chan on which it will put a map of :religions, :regions, and :education-levels"
+  (let [promise (promise-chan)
+        religions-chan (http/get "/api/religions")
+        regions-chan (http/get "/api/regions")
+        education-levels-chan (http/get "/api/educationLevels")]
+    (go 
+      (>! promise (-> {} 
+          (assoc 
+            :religions (-> (<! religions-chan) :body (util/pluck :religion-id :religion-name) put-other-at-end)
+            :regions (-> (<! regions-chan) :body (util/pluck :region-id :region-name) put-other-at-end)
+            :education-levels (-> (<! education-levels-chan) :body (util/pluck :education-level-id :education-level-name) put-other-at-end)))))
+    promise))
+
 (defn signup-page [] 
   (let [fields (atom {})
-        religions (atom nil)
-        regions (atom nil)
-        education-levels (atom nil)
+        data-lists (atom nil)
         error-message (atom nil)
         signup (fn [e] 
                 (if (not= (:password @fields) (:password2 @fields)) 
@@ -313,23 +328,13 @@
                      :handler #(accountant/navigate! "/login")
                      :error-handler #(reset! error-message (str "Could not sign up. " (:response %1)))}))
                 (.preventDefault e))]
-    (go 
-      (let [religion-list (:body (<! (http/get "/api/religions")))
-            religion-pairs (for [religion religion-list] [(:religion-id religion) (:religion-name religion)])]
-        (reset! religions (put-other-at-end religion-pairs))))
-    (go 
-      (let [region-list (:body (<! (http/get "/api/regions")))
-            region-pairs (for [region region-list] [(:region-id region) (:region-name region)])]
-        (reset! regions (put-other-at-end region-pairs))))
-    (go 
-      (let [education-level-list (:body (<! (http/get "/api/educationLevels")))
-            education-level-pairs (for [education-level education-level-list] [(:education-level-id education-level) (:education-level-name education-level)])]
-        (reset! education-levels (put-other-at-end education-level-pairs))))
+    (go
+      (reset! data-lists (<! (get-lists))))
     (fn []
       [:div 
        [header]
        [:h3 "Sign up"]
-       (if-not (and @religions @regions @education-levels)   
+       (if-not @data-lists   
          [:div "Loading..."]
          [:form {:on-submit signup}
            [bind-fields 
@@ -361,17 +366,17 @@
               [:div.row
                [:div.six.columns
                 [:label {:for "religion"} "Religion"] 
-                (make-select-box :religion-id @religions)]
+                (make-select-box :religion-id (:religions @data-lists))]
                [:div.six.columns
                 [:label {:for "regions"} "Region"] 
-                (make-select-box :region-id @regions)]]           
+                (make-select-box :region-id (:regions @data-lists))]]           
               [:div.row
                [:div.six.columns
                 [:label {:for "skin-color"} "Skin color"] 
                 (make-select-box :skin-color {:dark "Dark" :in-between "In Between" :light "Light"})]
                [:div.six.columns
                 [:label {:for "regions"} "Education level"] 
-                (make-select-box :education-level-id @education-levels)]]           
+                (make-select-box :education-level-id (:education-levels @data-lists))]]           
               [:div.row
                [:div.six.columns
                 [:label {:for "politics-social"} "Politics on a social dimension"] 
@@ -402,7 +407,8 @@
   (let [local-notif-chan (chan)
         match-model (atom nil)
         load-data (fn [] (get-match-model match-id match-model))
-        lightbox-img (atom nil)]
+        lightbox-img (atom nil)
+        data-lists (atom nil)]
     (load-data)
     (tap notification-mult local-notif-chan)
     (go-loop []
@@ -410,6 +416,8 @@
         ; Reload
         (prn "Reloading due to notification")
         (load-data)))
+    (go
+      (reset! data-lists (<! (get-lists))))
     (create-class 
       {:component-will-unmount #(untap notification-mult local-notif-chan)
        :reagent-render
@@ -430,16 +438,59 @@
                  
                  [:h3 (str "Journal with " other-pseudo)]
                  [:p (str "This journal started " (format-from-now (:starts-at match)) 
-                          (if (:running match) " and ends " " and ended ")            
+                          (if (not= (:status match) "over") " and ends " " and ended ")            
                           (format-from-now (:ends-at match)) ".")]     
+                 (when (= (:status match) "quiz")
+                   (if-not @data-lists
+                     [:p "Loading..."]
+                     (let [form-data (atom {})
+                           make-guess (fn [] (prn "Making guess" @form-data))]
+                       [:div 
+                        [:h4 "Quiz"]
+                        [:p "Try to guess the demographic information about your journal partner."]
+                        [bind-fields
+                         [:div
+                           [:div.row
+                             [:div.six.columns
+                              [:label {:for "gender"} "Gender"] 
+                              (make-select-box :gender {:male "Male" :female "Female" :other "Other"})]
+                             [:div.six.columns
+                              [:label {:for "birth-year"} "Year of birth"] 
+                              [:input.u-full-width {:field :numeric :type :number :id :birth-year :required true :min 1900 :max (.getFullYear (js/Date.))}]]]
+                            [:div.row
+                             [:div.six.columns
+                              [:label {:for "religion"} "Religion"] 
+                              (make-select-box :religion-id (:religions @data-lists))]
+                             [:div.six.columns
+                              [:label {:for "regions"} "Region"] 
+                              (make-select-box :region-id (:regions @data-lists))]]           
+                            [:div.row
+                             [:div.six.columns
+                              [:label {:for "skin-color"} "Skin color"] 
+                              (make-select-box :skin-color {:dark "Dark" :in-between "In Between" :light "Light"})]
+                             [:div.six.columns
+                              [:label {:for "regions"} "Education level"] 
+                              (make-select-box :education-level-id (:education-levels @data-lists))]]           
+                            [:div.row
+                             [:div.six.columns
+                              [:label {:for "politics-social"} "Politics on a social dimension"] 
+                              (make-select-box :politics-social {:liberal "Liberal" :moderate "Moderate" :conservative "Conservative"})]
+                             [:div.six.columns
+                              [:label {:for "regions"} "Politics on a political dimension"] 
+                              (make-select-box :politics-economics {:liberal "Liberal" :moderate "Moderate" :conservative "Conservative"})]]]
+                        form-data]
+                        [:div.row 
+                         [:div.six.columns
+                          [:button.button-primary {:on-click make-guess} "Make your guess"]]]
+                       ])))
                  (doall 
                    (for [challenge showable-challenges]
                      ^{:key (:challenge-instance-id challenge)} [:div.box.challenge 
                       [:h4 "Question: " [:em (:description challenge)]]
                       [:div.row [:p (-> (js/moment (:starts-at challenge)) (.format "MMMM Do YYYY"))]]
-                      (when (and (:running match) (active? challenge)) 
+                      (when (and (not= (:status match) "over") (active? challenge)) 
                         [:div.row [:p (str "This question ends " (format-from-now (:ends-at challenge)))]])
-                      (when (and (not (responded-to-challenge? challenge)) (active? challenge) (:running match))
+                      (when (and (not (responded-to-challenge? challenge)) (active? challenge) (not= (:status match) "over"))
                         [:div.row 
                           [:button.button-primary {:on-click #(accountant/navigate! (str "/match/" match-id "/respond/" (:challenge-instance-id challenge)))} "Answer now"]])
                       (if (empty? (:responses challenge))
@@ -460,7 +511,7 @@
                               [:div.row 
                                 [:div.twelve.columns.caption caption]])]))]))
                  [:div.row.section
-                  (if (and (:running match) (not-empty upcoming-challenges)) 
+                  (if (and (not= (:status match) "over") (not-empty upcoming-challenges)) 
                     [:h4 (str "Plus " (count upcoming-challenges) " more questions to come...")]
                     [:h4 "That's it! No more questions coming."])]]))])})))
        

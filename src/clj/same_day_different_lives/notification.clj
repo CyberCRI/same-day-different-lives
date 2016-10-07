@@ -25,6 +25,7 @@
 ;   :new-response
 ;   :unlocked-challenge
 ;   :created-match
+;   :unlocked-quiz
 ;   :ended-match
 
 (defn user-is-connected? [user-id] (contains? @users-to-channels user-id))
@@ -51,6 +52,8 @@
     :new-response {:text "The other player has answered the question"
                    :link (str "/match/" (:match-id notification))}
     :unlocked-challenge {:text "There's a new question to answer"
+                         :link (str "/match/" (:match-id notification))} 
+    :unlocked-quiz {:text "There's a quiz to play"
                          :link (str "/match/" (:match-id notification))} 
     :ended-match {:text "Your journal has ended"
                   :link (str "/match/" (:match-id notification))}

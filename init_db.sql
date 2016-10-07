@@ -94,6 +94,9 @@ CREATE TABLE users (
 	-- TODO: Other possible criteria include language, ethnicity, caste, class / wealth 
 );
 
+DROP TYPE IF EXISTS match_status CASCADE;
+CREATE TYPE match_status AS ENUM ('challenge', 'quiz', 'over');
+
 DROP TABLE IF EXISTS matches CASCADE;
 CREATE TABLE matches (
 	match_id serial primary key,
@@ -101,8 +104,9 @@ CREATE TABLE matches (
 	user_b int not null references users(user_id),
 	created_at timestamp not null default current_timestamp,
 	starts_at timestamp not null,
+	quiz_at timestamp not null,
 	ends_at timestamp not null,
-	running boolean not null default TRUE
+	status match_status not null default 'challenge'
 );
 
 DROP TYPE IF EXISTS challenge_instance_status CASCADE;

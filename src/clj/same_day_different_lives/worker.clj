@@ -2,6 +2,7 @@
   (:require [clojure.core.async :refer [<! timeout chan go]]
             [same-day-different-lives.config :refer [config]]
             [same-day-different-lives.notification :as notification]
+            [same-day-different-lives.model :as model]
             [clojure.java.jdbc :as jdbc]
             [clj-time.jdbc]
             [clj-time.core :as t]
@@ -33,19 +34,21 @@
         user-pairs (partition 2 (shuffle users))
         challenges (jdbc/query db ["select challenge_id from challenges"]
                                {:row-fn :challenge_id})
-        selected-challenges (take 7 (shuffle challenges))]
+        selected-challenges (take 6 (shuffle challenges))]
     (doseq [[user-a user-b] user-pairs]
       (prn "making match for users" user-a user-b "challenges" selected-challenges)
       ; Make match
       (let [[{match-id :match_id}] 
             (jdbc/insert! db :matches { :user_a user-a :user_b user-b
                                         :starts_at (t/now)
+                                        :quiz_at (t/plus (t/now) (t/days 6)) 
                                         :ends_at (t/plus (t/now) (t/days 7)) })]
         ; Setup challenges
         (doseq-indexed [challenge selected-challenges offset]
           (jdbc/insert! db :challenge_instances {:challenge_id challenge :match_id match-id
                                                  :starts_at (t/plus (t/now) (t/days offset))
                                                  :ends_at (t/plus (t/now) (t/days (inc offset)))}))
+
         ; Send notifications
         (doseq [user-id [user-a user-b]]
           (notification/send! user-id 
@@ -55,18 +58,35 @@
       ; Change user statuses
       (jdbc/update! db :users { :status "playing" } ["user_id in (?, ?)" user-a user-b]))))
 
+(defn move-matches-to-quiz-mode [] 
+  "Look for matches that should enter the quiz mode, and change the status"
+  (let [quiz-matches (jdbc/query db ["select match_id, user_a, user_b 
+                                        from matches
+                                        where status = 'challenge'
+                                          and quiz_at < now()"]
+                          {:row-fn model/transform-keys-to-clojure-keywords})]
+    (doseq [{:keys [match-id user-a user-b]} quiz-matches]
+      (prn "moving match to quiz mode" match-id)
+      ; Set match to quiz mode
+      (jdbc/update! db :matches {:status "quiz"} ["match_id = ?" match-id])
+      ; Send notifications
+      (doseq [user-id [user-a user-b]]
+        (notification/send! user-id 
+                            {:type :unlocked-quiz 
+                             :match-id match-id})))))
+
 (defn expire-matches [] 
   "Look for matches that are over, and expire them"
   (let [expired-matches (jdbc/query db ["select match_id, user_a, user_b 
                                         from matches
-                                        where running
+                                        where status != 'over'
                                           and ends_at < now()"]
                           {:row-fn (fn [{:keys [match_id user_a user_b]}]
                                      {:match-id match_id :user-a user_a :user-b user_b})})]
     (doseq [{:keys [match-id user-a user-b]} expired-matches]
       (prn "expiring match " match-id)
       ; Set match to expired
-      (jdbc/update! db :matches {:running false} ["match_id = ?" match-id])
+      (jdbc/update! db :matches {:status "over"} ["match_id = ?" match-id])
       ; Set challenge instances to expired
       (jdbc/update! db :challenge_instances {:status "over"} ["match_id = ?" match-id])
       ; Change user statuses
@@ -82,7 +102,7 @@
   (let [unlocked-challenge-instances (jdbc/query db ["select matches.match_id, matches.user_a, matches.user_b, challenge_instances.challenge_instance_id 
                                                     from matches, challenge_instances
                                                     where challenge_instances.match_id = matches.match_id 
-                                                      and matches.running
+                                                      and matches.status != 'over'
                                                       and challenge_instances.status = 'upcoming'
                                                       and challenge_instances.starts_at < now()
                                                       and challenge_instances.ends_at > now()"]
@@ -112,6 +132,7 @@
     (while true
       (<! (timeout 1000))
       (expire-matches)
+      (move-matches-to-quiz-mode)
       (expire-challenge-instances)
       (unlock-challenge-instances)
       (pair-users))))
