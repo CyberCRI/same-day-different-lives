@@ -3,6 +3,7 @@
             [same-day-different-lives.worker :refer [run-worker]]
             [same-day-different-lives.config :refer [config]]
             [same-day-different-lives.conversion :refer [has-deps?]]
+            [same-day-different-lives.notification :refer [run-emailer]]
             [org.httpkit.server :refer [run-server]])
   (:gen-class))
 
@@ -11,4 +12,5 @@
     (throw (Error. "ffmpeg is either not installed or inaccessible"))
     (let [port (Integer/parseInt (or (:port config) "3000"))]
      (run-server app {:port port :join? false})
-     (run-worker))))
+     (run-worker)
+     (run-emailer))))
