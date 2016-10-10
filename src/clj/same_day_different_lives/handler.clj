@@ -85,14 +85,14 @@
 (def demographic-fields [:gender :birth-year :religion-id :region-id :skin-color :education-level-id :politics-social :politics-economics])
 
 (defn create-user [request]
-  (let [{:keys [pseudo email password]} (:body request)]
-   (if-not (and pseudo email password) 
-     (make-error-response "Pseudo, email, and password are required")
-     (let [demographic-values (model/transform-keys-to-db-keywords (select-keys (:body request) demographic-fields))]
-      ; (prn "received demographic-values" demographic-values)
+  (let [{:keys [email password]} (:body request)]
+   (if-not (and email password) 
+     (make-error-response "Email and password are required")
+     (let [demographic-values (model/transform-keys-to-db-keywords (select-keys (:body request) demographic-fields))
+           pseudo (model/random-name)]
       (jdbc/insert! db :users (merge {:pseudo pseudo :email email :password (password/encrypt password)}
                                      demographic-values))
-      (response {})))))
+      (response {:pseudo pseudo})))))
 
 (defn login [request]
   (let [{:keys [email password]} (keywordize-keys (:body request))]

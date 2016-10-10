@@ -319,13 +319,16 @@
   (let [fields (atom {})
         data-lists (atom nil)
         error-message (atom nil)
+        new-pseudo (atom nil)
         signup (fn [e] 
                 (if (not= (:password @fields) (:password2 @fields)) 
                   (reset! error-message "Passwords don't match")
                   (POST "/api/users" 
                     {:params @fields 
                      :format :json 
-                     :handler #(accountant/navigate! "/login")
+                     :handler (fn [response]
+                                (prn "Got response" response) 
+                                (reset! new-pseudo (-> response keywordize-keys :pseudo)))
                      :error-handler #(reset! error-message (str "Could not sign up. " (:response %1)))}))
                 (.preventDefault e))]
     (go
@@ -336,58 +339,62 @@
        [:h3 "Sign up"]
        (if-not @data-lists   
          [:div "Loading..."]
-         [:form {:on-submit signup}
-           [bind-fields 
-            [:div 
-              [:div.row
-               [:div.six.columns
-                [:label {:for "email"} "Email (kept private)"] 
-                [:input.u-full-width {:field :email :id :email :required true}]] 
-               [:div.six.columns
-                [:label {:for "pseudo"} "Pseudonyme (this will be shown to others)"] 
-                [:input.u-full-width {:field :text :id :pseudo :required true}]]] 
-              [:div.row
-               [:div.six.columns
-                [:label {:for "password"} "Password"] 
-                [:input.u-full-width {:field :password :id :password :required true}]]
-               [:div.six.columns
-                [:label {:for "password2"} "Confirm password"] 
-                [:input.u-full-width {:field :password :id :password2 :required true}]]]
-              [:div.row
-               [:h4.u-full-width "About you"]
-               [:p.u-full-width "This information is used to pair you up with other people."]]
-              [:div.row
-               [:div.six.columns
-                [:label {:for "gender"} "Gender"] 
-                (make-select-box :gender {:male "Male" :female "Female" :other "Other"})]
-               [:div.six.columns
-                [:label {:for "birth-year"} "Year of birth"] 
-                [:input.u-full-width {:field :numeric :type :number :id :birth-year :required true :min 1900 :max (.getFullYear (js/Date.))}]]]
-              [:div.row
-               [:div.six.columns
-                [:label {:for "religion"} "Religion"] 
-                (make-select-box :religion-id (:religions @data-lists))]
-               [:div.six.columns
-                [:label {:for "regions"} "Region"] 
-                (make-select-box :region-id (:regions @data-lists))]]           
-              [:div.row
-               [:div.six.columns
-                [:label {:for "skin-color"} "Skin color"] 
-                (make-select-box :skin-color {:dark "Dark" :in-between "In Between" :light "Light"})]
-               [:div.six.columns
-                [:label {:for "regions"} "Education level"] 
-                (make-select-box :education-level-id (:education-levels @data-lists))]]           
-              [:div.row
-               [:div.six.columns
-                [:label {:for "politics-social"} "Politics on a social dimension"] 
-                (make-select-box :politics-social {:liberal "Liberal" :moderate "Moderate" :conservative "Conservative"})]
-               [:div.six.columns
-                [:label {:for "regions"} "Politics on a political dimension"] 
-                (make-select-box :politics-economics {:liberal "Liberal" :moderate "Moderate" :conservative "Conservative"})]]]
-            fields]
-           [:p 
-            [:input.button-primary {:type :submit :value "Sign up"}]]
-           [:p.error-message @error-message]])])))
+         (if @new-pseudo 
+           [:div
+             [:p [:strong "Account Created"]]
+             [:p "To hide your identity, we have randomly chosen the name " 
+              [:strong @new-pseudo] 
+              " for you."]
+             [:button.button-primary {:on-click #(accountant/navigate! "/login")} "Go to login page"]]
+           [:form {:on-submit signup}
+             [bind-fields 
+              [:div 
+                [:div.row
+                 [:div.six.columns
+                  [:label {:for "email"} "Email (kept private)"] 
+                  [:input.u-full-width {:field :email :id :email :required true}]]]
+                [:div.row
+                 [:div.six.columns
+                  [:label {:for "password"} "Password"] 
+                  [:input.u-full-width {:field :password :id :password :required true}]]
+                 [:div.six.columns
+                  [:label {:for "password2"} "Confirm password"] 
+                  [:input.u-full-width {:field :password :id :password2 :required true}]]]
+                [:div.row
+                 [:h4.u-full-width "About you"]
+                 [:p.u-full-width "This information is used to pair you up with other people."]]
+                [:div.row
+                 [:div.six.columns
+                  [:label {:for "gender"} "Gender"] 
+                  (make-select-box :gender {:male "Male" :female "Female" :other "Other"})]
+                 [:div.six.columns
+                  [:label {:for "birth-year"} "Year of birth"] 
+                  [:input.u-full-width {:field :numeric :type :number :id :birth-year :required true :min 1900 :max (.getFullYear (js/Date.))}]]]
+                [:div.row
+                 [:div.six.columns
+                  [:label {:for "religion"} "Religion"] 
+                  (make-select-box :religion-id (:religions @data-lists))]
+                 [:div.six.columns
+                  [:label {:for "regions"} "Region"] 
+                  (make-select-box :region-id (:regions @data-lists))]]           
+                [:div.row
+                 [:div.six.columns
+                  [:label {:for "skin-color"} "Skin color"] 
+                  (make-select-box :skin-color {:dark "Dark" :in-between "In Between" :light "Light"})]
+                 [:div.six.columns
+                  [:label {:for "regions"} "Education level"] 
+                  (make-select-box :education-level-id (:education-levels @data-lists))]]           
+                [:div.row
+                 [:div.six.columns
+                  [:label {:for "politics-social"} "Politics on a social dimension"] 
+                  (make-select-box :politics-social {:liberal "Liberal" :moderate "Moderate" :conservative "Conservative"})]
+                 [:div.six.columns
+                  [:label {:for "regions"} "Politics on a political dimension"] 
+                  (make-select-box :politics-economics {:liberal "Liberal" :moderate "Moderate" :conservative "Conservative"})]]]
+              fields]
+             [:p 
+              [:input.button-primary {:type :submit :value "Sign up"}]]
+             [:p.error-message @error-message]]))])))
 
 (defn to-ms [date-string] (.getTime (new js/Date date-string)))
 

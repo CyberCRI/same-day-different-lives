@@ -7,6 +7,8 @@
 
 (def db (merge (:db config) { :stringtype "unspecified" }))
 
+(def names (string/split (slurp "resources/names.txt") #"\n"))
+
 
 ; UTILITY FUNCTIONS
 
@@ -87,3 +89,4 @@
                       match-id]
                       {:row-fn prepare-for-json})))
  
+(defn random-name [] (rand-nth names))
