@@ -102,3 +102,15 @@ input.caption {
 .centered {
   text-align: center;
 }
+
+.correct-answer { 
+  color: green;
+}
+
+.wrong-answer {
+  color: red;
+}
+
+.small {
+  font-size: 1.0rem;
+}

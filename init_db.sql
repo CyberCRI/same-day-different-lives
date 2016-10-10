@@ -139,6 +139,7 @@ CREATE TABLE quiz_responses (
 	quiz_response_id serial primary key,
 	user_id int not null references users(user_id),
 	match_id int not null references matches(match_id),
+	created_at timestamp not null default current_timestamp,
 
 	gender gender,
 	birth_year int,

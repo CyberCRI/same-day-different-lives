@@ -235,19 +235,6 @@
                                          :filename filename
                                          :mime_type mime-type
                                          :caption caption}))
-
-(defn get-match [match-id]
-  (first (jdbc/query db ["select user_a, user_b, created_at, starts_at, ends_at, status 
-                          from matches
-                          where match_id = ?"
-                      match-id]
-                      {:row-fn (fn [{:keys [user_a user_b created_at starts_at ends_at status]}]
-                                     {:user-a user_a 
-                                      :user-b user_b 
-                                      :created-at (.toString created_at) 
-                                      :starts-at (.toString starts_at) 
-                                      :ends-at (.toString ends_at)
-                                      :status status})})))
  
 (defn get-match-info [match-id]
   (let [match (first (jdbc/query db ["select user_a, user_b, created_at, starts_at, ends_at, status 
@@ -280,10 +267,16 @@
   (response (get-matches-for-user (:user-id session))))
 
 (defn obtain-match-history [{:keys [session params]}]
-  (if-not (can-access-match (:user-id session) (:match-id params))
-    (make-error-response "Cannot access that match")
-    (response {:challenges (get-challenges-in-match (:match-id params))
-               :match (get-match-info (:match-id params))})))
+  (let [match-id (:match-id params)
+        user-id (:user-id session)]
+    (if-not (can-access-match user-id match-id)
+      (make-error-response "Cannot access that match")
+      (let [match (model/get-match match-id)
+            other-user-id (util/find-first-other [(:user-a match) (:user-b match)] user-id)]
+        (response {:challenges (get-challenges-in-match match-id)
+                   :match (get-match-info match-id)
+                   :quiz-responses (model/list-quiz-responses match-id)
+                   :other-user-info (model/get-public-user-info other-user-id)})))))
 
 (defn can-access-challenge-instance [user-id challenge-instance-id]
   (not-empty (jdbc/query db ["select challenge_instances.challenge_instance_id
@@ -304,7 +297,7 @@
     (make-error-response "Cannot access that challenge instance")
     
     (let [challenge-instance (get-challenge-instance (:challenge-instance-id params))
-          match (get-match (:match-id challenge-instance))
+          match (model/get-match (:match-id challenge-instance))
           other-user-id (util/find-first-other [(:user-a match) (:user-b match)] (:user-id session))
           {:keys [filename mime-type]} (create-file (:file params) (:type challenge-instance))]   
         (submit-challenge-response 
@@ -325,6 +318,11 @@
 (defn obtain-regions [request] (response (model/list-regions)))
 
 (defn obtain-education-levels [request] (response (model/list-education-levels)))
+
+(defn obtain-quiz-responses [{:keys [session params body]}]
+  (if-not (can-access-match (:user-id session) (:match-id params))
+    (make-error-response "Cannot access that match")
+      (response (model/list-quiz-responses (:match-id params)))))
 
 (defn post-quiz-response [{:keys [session params body]}]
   (if-not (can-access-match (:user-id session) (:match-id params))
@@ -362,6 +360,7 @@
   (GET "/api/regions" [] (-> obtain-regions wrap-json-body wrap-json-response))
   (GET "/api/educationLevels" [] (-> obtain-education-levels wrap-json-body wrap-json-response))
 
+  (GET "/api/quiz/:match-id" [] (-> obtain-quiz-responses wrap-require-user wrap-json-body wrap-json-response))
   (POST "/api/quiz/:match-id" [] (-> post-quiz-response wrap-require-user wrap-json-body wrap-json-response)))
   
 (defroutes other-routes

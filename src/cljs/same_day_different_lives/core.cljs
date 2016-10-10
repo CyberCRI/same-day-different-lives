@@ -403,13 +403,17 @@
   (let [responses (:responses challenge)]
     (not-empty (filter #(= (:user %) (:pseudo @user-model)) responses))))
 
+(defn capitalize [s] 
+  (if s (string/capitalize s) s))
+
+(def standard-quiz-criteria [:gender :religion-id :region-id :skin-color :education-level-id :politics-social :politics-economics])
+
 (defn match-page [match-id]
   (let [local-notif-chan (chan)
         match-model (atom nil)
         load-data (fn [] (get-match-model match-id match-model))
         lightbox-img (atom nil)
-        data-lists (atom nil)
-        quiz-response (atom nil)]
+        data-lists (atom nil)]
     (load-data)
     (tap notification-mult local-notif-chan)
     (go-loop []
@@ -425,25 +429,87 @@
         (fn []
           [:div
             [header-with-login]
-            (if (:error @match-model)
-              [:p.error-message (str "Error: " (:error @match-model))]
-              (let [{:keys [match challenges]} @match-model
-                    other-pseudo (find-first-other [(:user-a match) (:user-b match)] 
-                                                   (:pseudo @user-model))
-                    showable-challenges (filter #(< (to-ms (:starts-at %)) (js/Date.now)) challenges)
-                    upcoming-challenges (filter #(> (to-ms (:starts-at %)) (js/Date.now)) challenges)] 
-                [:div 
-                 ; Lightbox (only visible when lightbox-img contains a value)
-                 [:div.lightbox {:class (if @lightbox-img "visible" nil) :on-click #(reset! lightbox-img nil)}
-                  [:img {:src @lightbox-img}]]
-                 
-                 [:h3 (str "Journal with " other-pseudo)]
-                 [:p (str "This journal started " (format-from-now (:starts-at match)) 
-                          (if (not= (:status match) "over") " and ends " " and ended ")            
-                          (format-from-now (:ends-at match)) ".")]     
-                 (when (= (:status match) "quiz")
-                   (if-not @data-lists
-                     [:p "Loading..."]
+            (if-not (and @data-lists @match-model)
+              [:p "Loading..."]
+              (if (:error @match-model)
+                [:p.error-message (str "Error: " (:error @match-model))]
+                (let [{:keys [match challenges quiz-responses other-user-info]} @match-model
+                      other-pseudo (find-first-other [(:user-a match) (:user-b match)] 
+                                                     (:pseudo @user-model))
+                      showable-challenges (filter #(< (to-ms (:starts-at %)) (js/Date.now)) challenges)
+                      upcoming-challenges (filter #(> (to-ms (:starts-at %)) (js/Date.now)) challenges)
+                      own-quiz-response (first (filter #(= (:user-id %) (:user-id @user-model)) quiz-responses))
+                      correct-answer? (fn [criteria] (and (criteria own-quiz-response) 
+                                                          (= (criteria own-quiz-response) (criteria other-user-info))))
+                      birth-year-correct-answer? (and (:birth-year own-quiz-response) 
+                                                      (<= (js/Math.abs (- (:birth-year own-quiz-response) (:birth-year other-user-info))) 5))
+                      answer-class (fn [b] (if b "correct-answer" "wrong-answer"))
+                      lookup-list-value (fn [criteria value] (-> (filter #(= (first %) value) (criteria @data-lists)) 
+                                                                 first 
+                                                                 second))
+                      correct-answer-count (+ (->> standard-quiz-criteria 
+                                                (map correct-answer?)
+                                                (filter true?)
+                                                (count))
+                                              (if birth-year-correct-answer? 1 0))]
+                  (prn "own-quiz-response" own-quiz-response) 
+                  [:div 
+                   ; Lightbox (only visible when lightbox-img contains a value)
+                   [:div.lightbox {:class (if @lightbox-img "visible" nil) :on-click #(reset! lightbox-img nil)}
+                    [:img {:src @lightbox-img}]]
+                   
+                   [:h3 (str "Journal with " other-pseudo)]
+                   [:p (str "This journal started " (format-from-now (:starts-at match)) 
+                            (if (not= (:status match) "over") " and ends " " and ended ")            
+                            (format-from-now (:ends-at match)) ".")]
+                   (when own-quiz-response
+                     [:div
+                      [:h4 "Quiz Results"]
+                      [:p "Let's see how close your guess was:"]
+                      [:table.u-full-width
+                       [:thead
+                        [:tr
+                         [:th "Criteria"]
+                         [:th "Your Guess"]
+                         [:th "Correct Answer"]]]
+                       [:tbody
+                        [:tr 
+                         [:td "Gender"]
+                         [:td {:class (answer-class (correct-answer? :gender))} (capitalize (:gender own-quiz-response))]
+                         [:td (capitalize (:gender other-user-info))]]
+                        [:tr 
+                         [:td "Birth year"]
+                         [:td {:class (answer-class birth-year-correct-answer?)} 
+                              (:birth-year own-quiz-response)]
+                         [:td (:birth-year other-user-info)]]
+                        [:tr 
+                         [:td "Religion"]
+                         [:td {:class (answer-class (correct-answer? :religion-id))} (lookup-list-value :religions (:religion-id own-quiz-response))]
+                         [:td (lookup-list-value :religions (:religion-id other-user-info))]]
+                        [:tr 
+                         [:td "Region"]
+                         [:td {:class (answer-class (correct-answer? :region-id))} (lookup-list-value :regions (:region-id own-quiz-response))]
+                         [:td (lookup-list-value :regions (:region-id other-user-info))]]
+                        [:tr 
+                         [:td "Skin color"]
+                         [:td {:class (answer-class (correct-answer? :skin-color))} (capitalize (:skin-color own-quiz-response))]
+                         [:td (capitalize (:skin-color other-user-info))]]
+                        [:tr 
+                         [:td "Education level"]
+                         [:td {:class (answer-class (correct-answer? :education-level-id))} (lookup-list-value :education-levels (:education-level-id own-quiz-response))]
+                         [:td (lookup-list-value :education-levels (:education-level-id other-user-info))]]
+                        [:tr 
+                         [:td "Politics on a social dimension"]
+                         [:td {:class (answer-class (correct-answer? :politics-social))} (capitalize (:politics-social own-quiz-response))]
+                         [:td (capitalize (:politics-social other-user-info))]]
+                        [:tr 
+                         [:td "Politics on an economic dimension"]
+                         [:td {:class (answer-class (correct-answer? :politics-economics))} (capitalize (:politics-economics own-quiz-response))]
+                         [:td (capitalize (:politics-economics other-user-info))]]]]
+                      [:div.row
+                       [:p
+                        [:strong (str "You made " correct-answer-count " correct guesses out of 8")]]]])
+                   (when (and (not own-quiz-response) (= (:status match) "quiz"))
                      (let [form-data (atom {})
                            error-message (atom nil)
                            response-in-progress (atom false)
@@ -453,7 +519,7 @@
                                           (go
                                             (let [response (<! (http/post (str "/api/quiz/" match-id) {:json-params @form-data}))]
                                               (if (= :no-error (:error-code response))
-                                                (reset! quiz-response @form-data) 
+                                                (load-data)
                                                 (reset! error-message (:body response)))
                                               (reset! response-in-progress false)))))]
                        [:div 
@@ -494,38 +560,38 @@
                          [:div.six.columns
                           [:button.button-primary {:on-click make-guess} "Make your guess"]]]
                         [:div.row 
-                          [:p.error-message @error-message]]])))
-                 (doall 
-                   (for [challenge showable-challenges]
-                     ^{:key (:challenge-instance-id challenge)} [:div.box.challenge 
-                      [:h4 "Question: " [:em (:description challenge)]]
-                      [:div.row [:p (-> (js/moment (:starts-at challenge)) (.format "MMMM Do YYYY"))]]
-                      (when (and (not= (:status match) "over") (active? challenge)) 
-                        [:div.row [:p (str "This question ends " (format-from-now (:ends-at challenge)))]])
-                      (when (and (not (responded-to-challenge? challenge)) (active? challenge) (not= (:status match) "over"))
-                        [:div.row 
-                          [:button.button-primary {:on-click #(accountant/navigate! (str "/match/" match-id "/respond/" (:challenge-instance-id challenge)))} "Answer now"]])
-                      (if (empty? (:responses challenge))
-                        [:div.row
-                         [:p "No one has answered"]]
-                        (for [response (:responses challenge)]
-                          ^{:key (:challenge-response-id response)} 
-                          [:div.response-container
-                            [:div.row 
-                             [:div.two.columns 
-                              [:div.header (:user response)]]
-                             [:div.ten.columns.centered 
-                              (if (= "image" (:type challenge))
-                                [:img.response-image {:src (str "/uploads/" (:filename response)) 
-                                                      :on-click #(reset! lightbox-img (str "/uploads/" (:filename response)))}]
-                                [:audio.response-image {:controls true :src (str "/uploads/" (:filename response))}])]]
-                            (if-let [caption (:caption response)] 
+                          [:p.error-message @error-message]]]))
+                   (doall 
+                     (for [challenge showable-challenges]
+                       ^{:key (:challenge-instance-id challenge)} [:div.box.challenge 
+                        [:h5 "Question: " [:em (:description challenge)]]
+                        [:div.row [:p (-> (js/moment (:starts-at challenge)) (.format "MMMM Do YYYY"))]]
+                        (when (and (not= (:status match) "over") (active? challenge)) 
+                          [:div.row [:p (str "This question ends " (format-from-now (:ends-at challenge)))]])
+                        (when (and (not (responded-to-challenge? challenge)) (active? challenge) (not= (:status match) "over"))
+                          [:div.row 
+                            [:button.button-primary {:on-click #(accountant/navigate! (str "/match/" match-id "/respond/" (:challenge-instance-id challenge)))} "Answer now"]])
+                        (if (empty? (:responses challenge))
+                          [:div.row
+                           [:p "No one has answered"]]
+                          (for [response (:responses challenge)]
+                            ^{:key (:challenge-response-id response)} 
+                            [:div.response-container
                               [:div.row 
-                                [:div.twelve.columns.caption caption]])]))]))
-                 [:div.row.section
-                  (if (and (not= (:status match) "over") (not-empty upcoming-challenges)) 
-                    [:h4 (str "Plus " (count upcoming-challenges) " more questions to come...")]
-                    [:h4 "That's it! No more questions coming."])]]))])})))
+                               [:div.two.columns 
+                                [:div.header (:user response)]]
+                               [:div.ten.columns.centered 
+                                (if (= "image" (:type challenge))
+                                  [:img.response-image {:src (str "/uploads/" (:filename response)) 
+                                                        :on-click #(reset! lightbox-img (str "/uploads/" (:filename response)))}]
+                                  [:audio.response-image {:controls true :src (str "/uploads/" (:filename response))}])]]
+                              (if-let [caption (:caption response)] 
+                                [:div.row 
+                                  [:div.twelve.columns.caption caption]])]))]))
+                   [:div.row.section
+                    (if (and (not= (:status match) "over") (not-empty upcoming-challenges)) 
+                      [:h4 (str "Plus " (count upcoming-challenges) " more questions to come...")]
+                      [:h4 "That's it! No more questions coming."])]])))])})))
        
        
 (defn current-page []
