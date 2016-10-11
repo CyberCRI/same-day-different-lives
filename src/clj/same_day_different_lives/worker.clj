@@ -34,14 +34,16 @@
         user-pairs (partition 2 (shuffle users))
         challenges (jdbc/query db ["select challenge_id from challenges"]
                                {:row-fn :challenge_id})
-        selected-challenges (take 6 (shuffle challenges))]
+        selected-challenges (take 5 (shuffle challenges))]
     (doseq [[user-a user-b] user-pairs]
       (prn "making match for users" user-a user-b "challenges" selected-challenges)
       ; Make match
       (let [[{match-id :match_id}] 
+            ; 5 challenges, 1 quiz, 1 exchange 
             (jdbc/insert! db :matches { :user_a user-a :user_b user-b
                                         :starts_at (t/now)
-                                        :quiz_at (t/plus (t/now) (t/days 6)) 
+                                        :quiz_at (t/plus (t/now) (t/days 5)) 
+                                        :exchange_at (t/plus (t/now) (t/days 6)) 
                                         :ends_at (t/plus (t/now) (t/days 7)) })]
         ; Setup challenges
         (doseq-indexed [challenge selected-challenges offset]
@@ -73,6 +75,23 @@
       (doseq [user-id [user-a user-b]]
         (notification/send! user-id 
                             {:type :unlocked-quiz 
+                             :match-id match-id})))))
+
+(defn move-matches-to-exchange-mode [] 
+  "Look for matches that should enter the exchange mode, and change the status"
+  (let [matches (jdbc/query db ["select match_id, user_a, user_b 
+                                        from matches
+                                        where status = 'quiz'
+                                          and exchange_at < now()"]
+                          {:row-fn model/transform-keys-to-clojure-keywords})]
+    (doseq [{:keys [match-id user-a user-b]} matches]
+      (prn "moving match to exchange mode" match-id)
+      ; Set match to quiz mode
+      (jdbc/update! db :matches {:status "exchange"} ["match_id = ?" match-id])
+      ; Send notifications
+      (doseq [user-id [user-a user-b]]
+        (notification/send! user-id 
+                            {:type :unlocked-exchange 
                              :match-id match-id})))))
 
 (defn expire-matches [] 
@@ -132,6 +151,7 @@
     (while true
       (<! (timeout 1000))
       (expire-matches)
+      (move-matches-to-exchange-mode)
       (move-matches-to-quiz-mode)
       (expire-challenge-instances)
       (unlock-challenge-instances)

@@ -95,7 +95,7 @@ CREATE TABLE users (
 );
 
 DROP TYPE IF EXISTS match_status CASCADE;
-CREATE TYPE match_status AS ENUM ('challenge', 'quiz', 'over');
+CREATE TYPE match_status AS ENUM ('challenge', 'quiz', 'exchange', 'over');
 
 DROP TABLE IF EXISTS matches CASCADE;
 CREATE TABLE matches (
@@ -105,6 +105,7 @@ CREATE TABLE matches (
 	created_at timestamp not null default current_timestamp,
 	starts_at timestamp not null,
 	quiz_at timestamp not null,
+	exchange_at timestamp not null,
 	ends_at timestamp not null,
 	status match_status not null default 'challenge'
 );
@@ -150,3 +151,5 @@ CREATE TABLE quiz_responses (
 	politics_social political_position,
 	politics_economics political_position
 );
+
+
