@@ -1,14 +1,19 @@
 (ns same-day-different-lives.model
   (:require [same-day-different-lives.config :refer [config]]
             [clojure.string :as string]
+            [clojure.java.io :as io]
             [clojure.java.jdbc :as jdbc]))
 
 ; DATA
 
 (def db (merge (:db config) { :stringtype "unspecified" }))
 
-(def names (string/split (slurp "resources/names.txt") #"\n"))
-
+; Read names.txt file from packaged resources, and split into array
+(def names 
+  (-> (io/resource "names.txt")
+      io/reader
+      slurp
+      (string/split #"\n")))
 
 ; UTILITY FUNCTIONS
 
