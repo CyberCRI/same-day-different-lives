@@ -22,7 +22,7 @@
                          :link (str "/match/" (:match-id notification))} 
     :unlocked-quiz {:text "There's a quiz to play"
                     :link (str "/match/" (:match-id notification))} 
-    :unlocked-exchange {:text "You can communicate directly with the other player"
+    :unlocked-exchange {:text "You can chat directly with the other player"
                         :link (str "/match/" (:match-id notification))} 
     :new-exchange-message {:text "The other player has sent you a message"
                            :link (str "/match/" (:match-id notification))} 

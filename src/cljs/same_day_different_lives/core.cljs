@@ -106,27 +106,13 @@
 (defn button-link [href text]
   [:button {:on-click #(accountant/navigate! href)} text])
 
-(defn prepare-notification [notification]
-  (condp = (:type notification)
-    :new-response {:text "The other player has answered the question"
-                   :link (str "/match/" (:match-id notification))}
-    :unlocked-challenge {:text "There's a new question to answer"
-                         :link (str "/match/" (:match-id notification))} 
-    :unlocked-quiz {:text "Time to play a quiz"
-                    :link (str "/match/" (:match-id notification))} 
-    :ended-match {:text "Your journal has ended"
-                  :link (str "/match/" (:match-id notification))}
-    :created-match {:text "You have been paired up to make a new journal"
-                    :link (str "/match/" (:match-id notification))}
-    (prn "ERROR unknown notification type" (:type notification))))
-
 (defn remove-notification [notification-id]
   (swap! notifications (fn [col] (remove #(= (:id %1) notification-id) col))))
 
 (defn alerts []
   [:div 
     (for [notification @notifications]
-      (let [prepared-notification (prepare-notification notification)]
+      (let [prepared-notification (util/describe-notification notification)]
         ^{:key (:id notification)} [:div.row 
           [:div.twelve.columns.box.alert 
             [:a {:href (:link prepared-notification) 
@@ -440,7 +426,7 @@
               [:p "Loading..."]
               (if (:error @match-model)
                 [:p.error-message (str "Error: " (:error @match-model))]
-                (let [{:keys [match challenges quiz-responses other-user-info]} @match-model
+                (let [{:keys [match challenges quiz-responses other-user-info exchanges]} @match-model
                       other-pseudo (find-first-other [(:user-a match) (:user-b match)] 
                                                      (:pseudo @user-model))
                       showable-challenges (filter #(< (to-ms (:starts-at %)) (js/Date.now)) challenges)
@@ -468,6 +454,46 @@
                    [:p (str "This journal started " (format-from-now (:starts-at match)) 
                             (if (not= (:status match) "over") " and ends " " and ended ")            
                             (format-from-now (:ends-at match)) ".")]
+                   (when (or (not-empty exchanges) (= (:status match) "exchange"))
+                     [:div
+                      [:h4 "Exchange"]
+                      (if (empty? exchanges)
+                        [:p [:em (if (= (:status match) "exchange") "You can say something to the other player" "No exchanges")]])
+                      (when (= (:status match) "exchange")
+                        (let [submit-in-progress (atom false)
+                              exchange-error-message (atom nil)
+                              send-message (fn [e] 
+                                             (.preventDefault e)
+                                             (when-not @submit-in-progress
+                                               (let [message (.-value (.getElementById js/document "message"))]
+                                                 (prn "Sending message" message)
+                                                 (go 
+                                                   (let [response (<! (http/post (str "/api/exchanges/" match-id) {:json-params {:message message}}))]
+                                                    (if (= :no-error (:error-code response))
+                                                      (do 
+                                                        ; Clear message input box
+                                                        (set! (.-value (.getElementById js/document "message")) "")
+                                                        (load-data))
+                                                      (reset! exchange-error-message (:body response))))
+                                                    (reset! submit-in-progress false)))))]
+                          [:form {:on-submit send-message}
+                            [:div.row
+                             [:div.ten.columns
+                              [:input.u-full-width {:type :text :id :message :required true :placeholder "Write your message here..."}]]
+                             [:div.two.columns
+                              [:input.button-primary {:type :submit :value "Send"}]]
+                            [:div.row 
+                              [:p.error-message @exchange-error-message]]]]))
+                      (for [exchange exchanges]
+                        [:div.box.vertical-space
+                         [:div.row 
+                           [:div.three.columns (format-from-now (:created-at exchange))]
+                           [:div.two.columns 
+                            [:div.header (if (= (:user-id exchange) (:user-id @user-model)) 
+                                           (:pseudo @user-model) 
+                                           (:pseudo other-user-info))] ]
+                           [:div.seven.columns 
+                            [:em (:message exchange)]]]])])
                    (when own-quiz-response
                      [:div
                       [:h4 "Quiz Results"]
@@ -567,10 +593,11 @@
                           [:button.button-primary {:on-click make-guess} "Make your guess"]]]
                         [:div.row 
                           [:p.error-message @error-message]]]))
-                   (doall 
+                   [:div
+                     [:h4 "Questions"]
                      (for [challenge showable-challenges]
                        ^{:key (:challenge-instance-id challenge)} [:div.box.challenge 
-                        [:h5 "Question: " [:em (:description challenge)]]
+                        [:h5 [:em (:description challenge)]]
                         [:div.row [:p (-> (js/moment (:starts-at challenge)) (.format "MMMM Do YYYY"))]]
                         (when (and (not= (:status match) "over") (active? challenge)) 
                           [:div.row [:p (str "This question ends " (format-from-now (:ends-at challenge)))]])
@@ -593,7 +620,7 @@
                                   [:audio.response-image {:controls true :src (str "/uploads/" (:filename response))}])]]
                               (if-let [caption (:caption response)] 
                                 [:div.row 
-                                  [:div.twelve.columns.caption caption]])]))]))
+                                  [:div.twelve.columns.caption caption]])]))])]
                    [:div.row.section
                     (if (and (not= (:status match) "over") (not-empty upcoming-challenges)) 
                       [:h4 (str "Plus " (count upcoming-challenges) " more questions to come...")]

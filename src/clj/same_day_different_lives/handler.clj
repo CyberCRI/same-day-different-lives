@@ -276,7 +276,8 @@
         (response {:challenges (get-challenges-in-match match-id)
                    :match (get-match-info match-id)
                    :quiz-responses (model/list-quiz-responses match-id)
-                   :other-user-info (model/get-public-user-info other-user-id)})))))
+                   :other-user-info (model/get-public-user-info other-user-id)
+                   :exchanges (model/list-exchanges match-id)})))))
 
 (defn can-access-challenge-instance [user-id challenge-instance-id]
   (not-empty (jdbc/query db ["select challenge_instances.challenge_instance_id
@@ -331,6 +332,22 @@
       (model/submit-quiz-response (merge body {:match-id (:match-id params) :user-id (:user-id session)}))
       (response {}))))
 
+(defn post-exchange [{:keys [session params body]}]
+  (let [match-id (:match-id params)
+        user-id (:user-id session)]
+    (if-not (can-access-match user-id match-id)
+      (make-error-response "Cannot access that match")
+      (do
+        (model/submit-exchange (merge body {:match-id match-id :user-id user-id}))
+        
+        ; Send notification to other user
+        (let [match (model/get-match match-id)
+              other-user-id (util/find-first-other [(:user-a match) (:user-b match)] user-id)]
+          (notification/send! other-user-id 
+                              {:type :new-exchange-message
+                               :match-id match-id}))
+        (response {})))))
+
 
 ;;; ROUTES
 
@@ -361,7 +378,9 @@
   (GET "/api/educationLevels" [] (-> obtain-education-levels wrap-json-body wrap-json-response))
 
   (GET "/api/quiz/:match-id" [] (-> obtain-quiz-responses wrap-require-user wrap-json-body wrap-json-response))
-  (POST "/api/quiz/:match-id" [] (-> post-quiz-response wrap-require-user wrap-json-body wrap-json-response)))
+  (POST "/api/quiz/:match-id" [] (-> post-quiz-response wrap-require-user wrap-json-body wrap-json-response))
+  
+  (POST "/api/exchanges/:match-id" [] (-> post-exchange wrap-require-user wrap-json-body wrap-json-response)))
   
 (defroutes other-routes
   (files "/uploads" {:root "uploads"})
