@@ -10,7 +10,7 @@
               [clojure.string :as string]
               [clojure.walk :refer [keywordize-keys stringify-keys]]
               [cljs-http.client :as http]
-              [cljs.core.async :refer [<! >! chan mult tap untap promise-chan]]
+              [cljs.core.async :refer [<! >! chan mult tap untap]]
               [clojure.walk :as walk]
               [cljsjs.moment]))
 
@@ -303,7 +303,7 @@
 
 (defn get-lists []
   "Returns a promise chan on which it will put a map of :religions, :regions, and :education-levels"
-  (let [promise (promise-chan)
+  (let [promise (chan 1)
         religions-chan (http/get "/api/religions")
         regions-chan (http/get "/api/regions")
         education-levels-chan (http/get "/api/educationLevels")]
@@ -459,7 +459,6 @@
                                                 (filter true?)
                                                 (count))
                                               (if birth-year-correct-answer? 1 0))]
-                  (prn "own-quiz-response" own-quiz-response) 
                   [:div 
                    ; Lightbox (only visible when lightbox-img contains a value)
                    [:div.lightbox {:class (if @lightbox-img "visible" nil) :on-click #(reset! lightbox-img nil)}
