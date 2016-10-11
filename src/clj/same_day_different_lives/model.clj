@@ -93,7 +93,7 @@
  
 (defn list-exchanges [match-id]
   (jdbc/query db 
-              ["select user_id, created_at, message 
+              ["select exchange_id, user_id, created_at, message 
                 from exchanges
                 where match_id = ?
                 order by created_at desc"

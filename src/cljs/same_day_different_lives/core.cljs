@@ -212,7 +212,8 @@
       (let [notification (<! local-notif-chan)]
         ; Reload
         (prn "Reloading due to notification")
-        (load-data)))
+        (load-data)
+        (recur)))
     (create-class 
       {:component-will-unmount #(untap notification-mult local-notif-chan)
        :reagent-render
@@ -413,7 +414,8 @@
       (let [notification (<! local-notif-chan)]
         ; Reload
         (prn "Reloading due to notification")
-        (load-data)))
+        (load-data)
+        (recur)))
     (go
       (reset! data-lists (<! (get-lists))))
     (create-class 
@@ -484,16 +486,17 @@
                               [:input.button-primary {:type :submit :value "Send"}]]
                             [:div.row 
                               [:p.error-message @exchange-error-message]]]]))
-                      (for [exchange exchanges]
-                        [:div.box.vertical-space
-                         [:div.row 
-                           [:div.three.columns (format-from-now (:created-at exchange))]
-                           [:div.two.columns 
-                            [:div.header (if (= (:user-id exchange) (:user-id @user-model)) 
-                                           (:pseudo @user-model) 
-                                           (:pseudo other-user-info))] ]
-                           [:div.seven.columns 
-                            [:em (:message exchange)]]]])])
+                      (doall 
+                        (for [exchange exchanges]
+                          ^{:key (:exchange-id exchange)} [:div.box.vertical-space
+                           [:div.row 
+                             [:div.three.columns (format-from-now (:created-at exchange))]
+                             [:div.two.columns 
+                              [:div.header (if (= (:user-id exchange) (:user-id @user-model)) 
+                                             (:pseudo @user-model) 
+                                             (:pseudo other-user-info))] ]
+                             [:div.seven.columns 
+                              [:em (:message exchange)]]]]))])
                    (when own-quiz-response
                      [:div
                       [:h4 "Quiz Results"]
@@ -595,32 +598,33 @@
                           [:p.error-message @error-message]]]))
                    [:div
                      [:h4 "Questions"]
-                     (for [challenge showable-challenges]
-                       ^{:key (:challenge-instance-id challenge)} [:div.box.challenge 
-                        [:h5 [:em (:description challenge)]]
-                        [:div.row [:p (-> (js/moment (:starts-at challenge)) (.format "MMMM Do YYYY"))]]
-                        (when (and (not= (:status match) "over") (active? challenge)) 
-                          [:div.row [:p (str "This question ends " (format-from-now (:ends-at challenge)))]])
-                        (when (and (not (responded-to-challenge? challenge)) (active? challenge) (not= (:status match) "over"))
-                          [:div.row 
-                            [:button.button-primary {:on-click #(accountant/navigate! (str "/match/" match-id "/respond/" (:challenge-instance-id challenge)))} "Answer now"]])
-                        (if (empty? (:responses challenge))
-                          [:div.row
-                           [:p "No one has answered"]]
-                          (for [response (:responses challenge)]
-                            ^{:key (:challenge-response-id response)} 
-                            [:div.response-container
-                              [:div.row 
-                               [:div.two.columns 
-                                [:div.header (:user response)]]
-                               [:div.ten.columns.centered 
-                                (if (= "image" (:type challenge))
-                                  [:img.response-image {:src (str "/uploads/" (:filename response)) 
-                                                        :on-click #(reset! lightbox-img (str "/uploads/" (:filename response)))}]
-                                  [:audio.response-image {:controls true :src (str "/uploads/" (:filename response))}])]]
-                              (if-let [caption (:caption response)] 
+                     (doall 
+                       (for [challenge showable-challenges]
+                         ^{:key (:challenge-instance-id challenge)} [:div.box.challenge 
+                          [:h5 [:em (:description challenge)]]
+                          [:div.row [:p (-> (js/moment (:starts-at challenge)) (.format "MMMM Do YYYY"))]]
+                          (when (and (not= (:status match) "over") (active? challenge)) 
+                            [:div.row [:p (str "This question ends " (format-from-now (:ends-at challenge)))]])
+                          (when (and (not (responded-to-challenge? challenge)) (active? challenge) (not= (:status match) "over"))
+                            [:div.row 
+                              [:button.button-primary {:on-click #(accountant/navigate! (str "/match/" match-id "/respond/" (:challenge-instance-id challenge)))} "Answer now"]])
+                          (if (empty? (:responses challenge))
+                            [:div.row
+                             [:p "No one has answered"]]
+                            (for [response (:responses challenge)]
+                              ^{:key (:challenge-response-id response)} 
+                              [:div.response-container
                                 [:div.row 
-                                  [:div.twelve.columns.caption caption]])]))])]
+                                 [:div.two.columns 
+                                  [:div.header (:user response)]]
+                                 [:div.ten.columns.centered 
+                                  (if (= "image" (:type challenge))
+                                    [:img.response-image {:src (str "/uploads/" (:filename response)) 
+                                                          :on-click #(reset! lightbox-img (str "/uploads/" (:filename response)))}]
+                                    [:audio.response-image {:controls true :src (str "/uploads/" (:filename response))}])]]
+                                (if-let [caption (:caption response)] 
+                                  [:div.row 
+                                    [:div.twelve.columns.caption caption]])]))]))]
                    [:div.row.section
                     (if (and (not= (:status match) "over") (not-empty upcoming-challenges)) 
                       [:h4 (str "Plus " (count upcoming-challenges) " more questions to come...")]
@@ -681,6 +685,7 @@
      (set! (.-onmessage connection) (fn [e]
                                 (prn "got notification from server" (.-data e))
                                 (let [notification (parse-notification e)]
+                                  (prn "parsed notification" notification)
                                   ; Add to notifications
                                   (go 
                                     (>! notification-chan notification))
