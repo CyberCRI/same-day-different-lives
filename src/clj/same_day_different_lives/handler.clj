@@ -7,6 +7,7 @@
             [same-day-different-lives.config :refer [config]]
             [same-day-different-lives.conversion :refer [convert-file]]
             [same-day-different-lives.notification :as notification]
+            [same-day-different-lives.model :as model]
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
             [ring.middleware.json :refer [wrap-json-response wrap-json-body]]
@@ -20,7 +21,8 @@
             [crypto.password.pbkdf2 :as password]
             [clj-time.jdbc]
             [clj-time.core :as t]
-            [clj-time.coerce :as tc]))
+            [clj-time.coerce :as tc])
+  (:import (java.util Calendar)))
 
 (def db (merge (:db config) { :stringtype "unspecified" }))
 
@@ -80,13 +82,17 @@
         (io/copy tempfile (io/file (str "uploads/" new-filename)))
         { :filename new-filename :mime-type content-type}))))
 
+(def demographic-fields [:gender :birth-year :religion-id :region-id :skin-color :education-level-id :politics-social :politics-economics])
+
 (defn create-user [request]
-  (let [{:keys [pseudo email password]} (:body request)]
-   (if-not (and pseudo email password) 
-     (make-error-response "Pseudo, email, and password are required")
-     (do
-      (jdbc/insert! db :users { :pseudo pseudo :email email :password (password/encrypt password) })
-      (response {})))))
+  (let [{:keys [email password]} (:body request)]
+   (if-not (and email password) 
+     (make-error-response "Email and password are required")
+     (let [demographic-values (model/transform-keys-to-db-keywords (select-keys (:body request) demographic-fields))
+           pseudo (model/random-name)]
+      (jdbc/insert! db :users (merge {:pseudo pseudo :email email :password (password/encrypt password)}
+                                     demographic-values))
+      (response {:pseudo pseudo})))))
 
 (defn login [request]
   (let [{:keys [email password]} (keywordize-keys (:body request))]
@@ -117,7 +123,7 @@
 (defn get-active-match-for-user [user-id]
   (first (jdbc/query db ["select match_id, user_a, user_b 
                           from matches 
-                          where running 
+                          where status != 'over' 
                             and (user_a = ? or user_b = ?)"
                           user-id user-id]
           {:row-fn (fn [{:keys [match_id user_a user_b]}] {:match-id match_id :user-a user_a :user-b user_b})})))
@@ -140,7 +146,7 @@
         (let [other-user-id (util/find-first-other [user-a user-b] (:user-id user))]
           ; Set match to stopped
           (prn "stopping match" match-id "for users" user-a user-b "by request of user" (:user-id user))
-          (jdbc/update! db :matches {:running false} ["match_id = ?" match-id])
+          (jdbc/update! db :matches {:status "over"} ["match_id = ?" match-id])
           ; Change other user's status
           (jdbc/update! db :users { :status "ready" } ["user_id = ?" other-user-id])
           ; Send notification to other user
@@ -157,12 +163,12 @@
 
 
 (defn get-matches-for-user [user-id]
-  (let [matches (jdbc/query db ["select match_id, user_a, user_b, running, starts_at
+  (let [matches (jdbc/query db ["select match_id, user_a, user_b, status, starts_at
                                 from matches 
                                 where(user_a = ? or user_b = ?)
                                 order by starts_at DESC"
                                 user-id user-id]
-                {:row-fn (fn [{:keys [match_id user_a user_b running starts_at]}] {:match-id match_id :user-a user_a :user-b user_b :running running :starts_at (.toString starts_at)})})]
+                {:row-fn (fn [{:keys [match_id user_a user_b status starts_at]}] {:match-id match_id :user-a user_a :user-b user_b :status status :starts_at (.toString starts_at)})})]
     (for [match matches] 
       (assoc match :other-pseudo (get-user-pseudo (util/find-first-other [(:user-a match) (:user-b match)] user-id))))))
 
@@ -229,32 +235,19 @@
                                          :filename filename
                                          :mime_type mime-type
                                          :caption caption}))
-
-(defn get-match [match-id]
-  (first (jdbc/query db ["select user_a, user_b, created_at, starts_at, ends_at, running 
-                          from matches
-                          where match_id = ?"
-                      match-id]
-                      {:row-fn (fn [{:keys [user_a user_b created_at starts_at ends_at running]}]
-                                     {:user-a user_a 
-                                      :user-b user_b 
-                                      :created-at (.toString created_at) 
-                                      :starts-at (.toString starts_at) 
-                                      :ends-at (.toString ends_at)
-                                      :running running})})))
  
 (defn get-match-info [match-id]
-  (let [match (first (jdbc/query db ["select user_a, user_b, created_at, starts_at, ends_at, running 
+  (let [match (first (jdbc/query db ["select user_a, user_b, created_at, starts_at, ends_at, status 
                                       from matches
                                       where match_id = ?"
                               match-id]
-                          {:row-fn (fn [{:keys [user_a user_b created_at starts_at ends_at running]}]
+                          {:row-fn (fn [{:keys [user_a user_b created_at starts_at ends_at status]}]
                                          {:user-a user_a 
                                           :user-b user_b 
                                           :created-at (.toString created_at) 
                                           :starts-at (.toString starts_at) 
                                           :ends-at (.toString ends_at)
-                                          :running running})}))
+                                          :status status})}))
         pseudo-a (get-user-pseudo (:user-a match))
         pseudo-b (get-user-pseudo (:user-b match))]
     (assoc match :user-a pseudo-a :user-b pseudo-b)))
@@ -274,10 +267,17 @@
   (response (get-matches-for-user (:user-id session))))
 
 (defn obtain-match-history [{:keys [session params]}]
-  (if-not (can-access-match (:user-id session) (:match-id params))
-    (make-error-response "Cannot access that match")
-    (response {:challenges (get-challenges-in-match (:match-id params))
-               :match (get-match-info (:match-id params))})))
+  (let [match-id (:match-id params)
+        user-id (:user-id session)]
+    (if-not (can-access-match user-id match-id)
+      (make-error-response "Cannot access that match")
+      (let [match (model/get-match match-id)
+            other-user-id (util/find-first-other [(:user-a match) (:user-b match)] user-id)]
+        (response {:challenges (get-challenges-in-match match-id)
+                   :match (get-match-info match-id)
+                   :quiz-responses (model/list-quiz-responses match-id)
+                   :other-user-info (model/get-public-user-info other-user-id)
+                   :exchanges (model/list-exchanges match-id)})))))
 
 (defn can-access-challenge-instance [user-id challenge-instance-id]
   (not-empty (jdbc/query db ["select challenge_instances.challenge_instance_id
@@ -298,7 +298,7 @@
     (make-error-response "Cannot access that challenge instance")
     
     (let [challenge-instance (get-challenge-instance (:challenge-instance-id params))
-          match (get-match (:match-id challenge-instance))
+          match (model/get-match (:match-id challenge-instance))
           other-user-id (util/find-first-other [(:user-a match) (:user-b match)] (:user-id session))
           {:keys [filename mime-type]} (create-file (:file params) (:type challenge-instance))]   
         (submit-challenge-response 
@@ -312,6 +312,41 @@
                              :match-id (:match-id challenge-instance) 
                              :challenge-instance-id (:challenge-instance-id params)})
         (response {:filename filename}))))
+
+
+(defn obtain-religions [request] (response (model/list-religions)))
+
+(defn obtain-regions [request] (response (model/list-regions)))
+
+(defn obtain-education-levels [request] (response (model/list-education-levels)))
+
+(defn obtain-quiz-responses [{:keys [session params body]}]
+  (if-not (can-access-match (:user-id session) (:match-id params))
+    (make-error-response "Cannot access that match")
+      (response (model/list-quiz-responses (:match-id params)))))
+
+(defn post-quiz-response [{:keys [session params body]}]
+  (if-not (can-access-match (:user-id session) (:match-id params))
+    (make-error-response "Cannot access that match")
+    (do
+      (model/submit-quiz-response (merge body {:match-id (:match-id params) :user-id (:user-id session)}))
+      (response {}))))
+
+(defn post-exchange [{:keys [session params body]}]
+  (let [match-id (:match-id params)
+        user-id (:user-id session)]
+    (if-not (can-access-match user-id match-id)
+      (make-error-response "Cannot access that match")
+      (do
+        (model/submit-exchange (merge body {:match-id match-id :user-id user-id}))
+        
+        ; Send notification to other user
+        (let [match (model/get-match match-id)
+              other-user-id (util/find-first-other [(:user-a match) (:user-b match)] user-id)]
+          (notification/send! other-user-id 
+                              {:type :new-exchange-message
+                               :match-id match-id}))
+        (response {})))))
 
 
 ;;; ROUTES
@@ -336,8 +371,17 @@
   (POST "/api/challenge-instance/:challenge-instance-id" [] (-> post-challenge-response wrap-require-user wrap-multipart-params wrap-params wrap-json-response))
   
   (POST "/api/login" [] (-> login wrap-json-body wrap-json-response))
-  (POST "/api/logout" [] (-> logout wrap-keywordize wrap-json-body wrap-json-response wrap-require-user)))
+  (POST "/api/logout" [] (-> logout wrap-keywordize wrap-json-body wrap-json-response wrap-require-user))
+  
+  (GET "/api/religions" [] (-> obtain-religions wrap-json-body wrap-json-response))
+  (GET "/api/regions" [] (-> obtain-regions wrap-json-body wrap-json-response))
+  (GET "/api/educationLevels" [] (-> obtain-education-levels wrap-json-body wrap-json-response))
 
+  (GET "/api/quiz/:match-id" [] (-> obtain-quiz-responses wrap-require-user wrap-json-body wrap-json-response))
+  (POST "/api/quiz/:match-id" [] (-> post-quiz-response wrap-require-user wrap-json-body wrap-json-response))
+  
+  (POST "/api/exchanges/:match-id" [] (-> post-exchange wrap-require-user wrap-json-body wrap-json-response)))
+  
 (defroutes other-routes
   (files "/uploads" {:root "uploads"})
   (resources "/")
