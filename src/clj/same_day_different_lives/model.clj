@@ -51,6 +51,8 @@
 
 ; OPERATIONS
 
+(defn random-name [] (rand-nth names))
+
 (defn list-religions [] 
   (jdbc/query db ["select religion_id, religion_name
                   from religion
@@ -89,9 +91,19 @@
 (defn get-match [match-id]
   (first (jdbc/query db 
                      ["select match_id, user_a, user_b, created_at, starts_at, ends_at, status 
-                          from matches
-                          where match_id = ?"
+                      from matches
+                      where match_id = ?"
                       match-id]
                       {:row-fn prepare-for-json})))
  
-(defn random-name [] (rand-nth names))
+(defn list-exchanges [match-id]
+  (jdbc/query db 
+              ["select exchange_id, user_id, created_at, message 
+                from exchanges
+                where match_id = ?
+                order by created_at desc"
+               match-id]
+              {:row-fn prepare-for-json}))
+
+(defn submit-exchange [values-map] 
+  (jdbc/insert! db :exchanges (transform-keys-to-db-keywords values-map)))

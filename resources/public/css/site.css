@@ -114,3 +114,8 @@ input.caption {
 .small {
   font-size: 1.0rem;
 }
+
+.vertical-space {
+  margin-top: 10px;
+  margin-bottom: 10px;
+}

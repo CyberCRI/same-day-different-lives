@@ -106,27 +106,13 @@
 (defn button-link [href text]
   [:button {:on-click #(accountant/navigate! href)} text])
 
-(defn prepare-notification [notification]
-  (condp = (:type notification)
-    :new-response {:text "The other player has answered the question"
-                   :link (str "/match/" (:match-id notification))}
-    :unlocked-challenge {:text "There's a new question to answer"
-                         :link (str "/match/" (:match-id notification))} 
-    :unlocked-quiz {:text "Time to play a quiz"
-                    :link (str "/match/" (:match-id notification))} 
-    :ended-match {:text "Your journal has ended"
-                  :link (str "/match/" (:match-id notification))}
-    :created-match {:text "You have been paired up to make a new journal"
-                    :link (str "/match/" (:match-id notification))}
-    (prn "ERROR unknown notification type" (:type notification))))
-
 (defn remove-notification [notification-id]
   (swap! notifications (fn [col] (remove #(= (:id %1) notification-id) col))))
 
 (defn alerts []
   [:div 
     (for [notification @notifications]
-      (let [prepared-notification (prepare-notification notification)]
+      (let [prepared-notification (util/describe-notification notification)]
         ^{:key (:id notification)} [:div.row 
           [:div.twelve.columns.box.alert 
             [:a {:href (:link prepared-notification) 
@@ -226,7 +212,8 @@
       (let [notification (<! local-notif-chan)]
         ; Reload
         (prn "Reloading due to notification")
-        (load-data)))
+        (load-data)
+        (recur)))
     (create-class 
       {:component-will-unmount #(untap notification-mult local-notif-chan)
        :reagent-render
@@ -420,14 +407,43 @@
         match-model (atom nil)
         load-data (fn [] (get-match-model match-id match-model))
         lightbox-img (atom nil)
-        data-lists (atom nil)]
+        data-lists (atom nil)
+        submit-in-progress (atom false)
+        exchange-error-message (atom nil)
+        send-message (fn [e] 
+                       (.preventDefault e)
+                       (when-not @submit-in-progress
+                         (let [message (.-value (.getElementById js/document "message"))]
+                           (prn "Sending message" message)
+                           (go 
+                             (let [response (<! (http/post (str "/api/exchanges/" match-id) {:json-params {:message message}}))]
+                              (if (= :no-error (:error-code response))
+                                (do 
+                                  ; Clear message input box
+                                  (set! (.-value (.getElementById js/document "message")) "")
+                                  (load-data))
+                                (reset! exchange-error-message (:body response))))
+                              (reset! submit-in-progress false)))))
+        form-data (atom {})
+        quiz-error-message (atom nil)
+        response-in-progress (atom false)
+        make-guess (fn [] 
+                    (when-not @response-in-progress
+                      (reset! response-in-progress true)
+                      (go
+                        (let [response (<! (http/post (str "/api/quiz/" match-id) {:json-params @form-data}))]
+                          (if (= :no-error (:error-code response))
+                            (load-data)
+                            (reset! quiz-error-message (:body response)))
+                          (reset! response-in-progress false)))))]
     (load-data)
     (tap notification-mult local-notif-chan)
     (go-loop []
       (let [notification (<! local-notif-chan)]
         ; Reload
         (prn "Reloading due to notification")
-        (load-data)))
+        (load-data)
+        (recur)))
     (go
       (reset! data-lists (<! (get-lists))))
     (create-class 
@@ -440,7 +456,7 @@
               [:p "Loading..."]
               (if (:error @match-model)
                 [:p.error-message (str "Error: " (:error @match-model))]
-                (let [{:keys [match challenges quiz-responses other-user-info]} @match-model
+                (let [{:keys [match challenges quiz-responses other-user-info exchanges]} @match-model
                       other-pseudo (find-first-other [(:user-a match) (:user-b match)] 
                                                      (:pseudo @user-model))
                       showable-challenges (filter #(< (to-ms (:starts-at %)) (js/Date.now)) challenges)
@@ -468,6 +484,31 @@
                    [:p (str "This journal started " (format-from-now (:starts-at match)) 
                             (if (not= (:status match) "over") " and ends " " and ended ")            
                             (format-from-now (:ends-at match)) ".")]
+                   (when (or (not-empty exchanges) (= (:status match) "exchange"))
+                     [:div
+                      [:h4 "Exchange"]
+                      (if (empty? exchanges)
+                        [:p [:em (if (= (:status match) "exchange") "You can say something to the other player" "No exchanges")]])
+                      (when (= (:status match) "exchange")
+                        [:form {:on-submit send-message}
+                          [:div.row
+                           [:div.ten.columns
+                            [:input.u-full-width {:type :text :id :message :required true :placeholder "Write your message here..."}]]
+                           [:div.two.columns
+                            [:input.button-primary {:type :submit :value "Send"}]]
+                          [:div.row 
+                            [:p.error-message @exchange-error-message]]]])
+                      (doall 
+                        (for [exchange exchanges]
+                          ^{:key (:exchange-id exchange)} [:div.box.vertical-space
+                           [:div.row 
+                             [:div.three.columns (format-from-now (:created-at exchange))]
+                             [:div.two.columns 
+                              [:div.header (if (= (:user-id exchange) (:user-id @user-model)) 
+                                             (:pseudo @user-model) 
+                                             (:pseudo other-user-info))] ]
+                             [:div.seven.columns 
+                              [:em (:message exchange)]]]]))])
                    (when own-quiz-response
                      [:div
                       [:h4 "Quiz Results"]
@@ -516,84 +557,74 @@
                        [:p
                         [:strong (str "You made " correct-answer-count " correct guesses out of 8")]]]])
                    (when (and (not own-quiz-response) (= (:status match) "quiz"))
-                     (let [form-data (atom {})
-                           error-message (atom nil)
-                           response-in-progress (atom false)
-                           make-guess (fn [] 
-                                        (when-not @response-in-progress
-                                          (reset! response-in-progress true)
-                                          (go
-                                            (let [response (<! (http/post (str "/api/quiz/" match-id) {:json-params @form-data}))]
-                                              (if (= :no-error (:error-code response))
-                                                (load-data)
-                                                (reset! error-message (:body response)))
-                                              (reset! response-in-progress false)))))]
-                       [:div 
-                        [:h4 "Quiz"]
-                        [:p "Try to guess the demographic information about your journal partner."]
-                        [bind-fields
-                         [:div
-                           [:div.row
-                             [:div.six.columns
-                              [:label {:for "gender"} "Gender"] 
-                              (make-select-box :gender {:male "Male" :female "Female" :other "Other"})]
-                             [:div.six.columns
-                              [:label {:for "birth-year"} "Year of birth"] 
-                              [:input.u-full-width {:field :numeric :type :number :id :birth-year :required true :min 1900 :max (.getFullYear (js/Date.))}]]]
-                            [:div.row
-                             [:div.six.columns
-                              [:label {:for "religion"} "Religion"] 
-                              (make-select-box :religion-id (:religions @data-lists))]
-                             [:div.six.columns
-                              [:label {:for "regions"} "Region"] 
-                              (make-select-box :region-id (:regions @data-lists))]]           
-                            [:div.row
-                             [:div.six.columns
-                              [:label {:for "skin-color"} "Skin color"] 
-                              (make-select-box :skin-color {:dark "Dark" :in-between "In Between" :light "Light"})]
-                             [:div.six.columns
-                              [:label {:for "regions"} "Education level"] 
-                              (make-select-box :education-level-id (:education-levels @data-lists))]]           
-                            [:div.row
-                             [:div.six.columns
-                              [:label {:for "politics-social"} "Politics on a social dimension"] 
-                              (make-select-box :politics-social {:liberal "Liberal" :moderate "Moderate" :conservative "Conservative"})]
-                             [:div.six.columns
-                              [:label {:for "regions"} "Politics on a political dimension"] 
-                              (make-select-box :politics-economics {:liberal "Liberal" :moderate "Moderate" :conservative "Conservative"})]]]
-                        form-data]
-                        [:div.row 
-                         [:div.six.columns
-                          [:button.button-primary {:on-click make-guess} "Make your guess"]]]
-                        [:div.row 
-                          [:p.error-message @error-message]]]))
-                   (doall 
-                     (for [challenge showable-challenges]
-                       ^{:key (:challenge-instance-id challenge)} [:div.box.challenge 
-                        [:h5 "Question: " [:em (:description challenge)]]
-                        [:div.row [:p (-> (js/moment (:starts-at challenge)) (.format "MMMM Do YYYY"))]]
-                        (when (and (not= (:status match) "over") (active? challenge)) 
-                          [:div.row [:p (str "This question ends " (format-from-now (:ends-at challenge)))]])
-                        (when (and (not (responded-to-challenge? challenge)) (active? challenge) (not= (:status match) "over"))
-                          [:div.row 
-                            [:button.button-primary {:on-click #(accountant/navigate! (str "/match/" match-id "/respond/" (:challenge-instance-id challenge)))} "Answer now"]])
-                        (if (empty? (:responses challenge))
+                     [:div 
+                      [:h4 "Quiz"]
+                      [:p "Try to guess the demographic information about your journal partner."]
+                      [bind-fields
+                       [:div
+                         [:div.row
+                           [:div.six.columns
+                            [:label {:for "gender"} "Gender"] 
+                            (make-select-box :gender {:male "Male" :female "Female" :other "Other"})]
+                           [:div.six.columns
+                            [:label {:for "birth-year"} "Year of birth"] 
+                            [:input.u-full-width {:field :numeric :type :number :id :birth-year :required true :min 1900 :max (.getFullYear (js/Date.))}]]]
                           [:div.row
-                           [:p "No one has answered"]]
-                          (for [response (:responses challenge)]
-                            ^{:key (:challenge-response-id response)} 
-                            [:div.response-container
-                              [:div.row 
-                               [:div.two.columns 
-                                [:div.header (:user response)]]
-                               [:div.ten.columns.centered 
-                                (if (= "image" (:type challenge))
-                                  [:img.response-image {:src (str "/uploads/" (:filename response)) 
-                                                        :on-click #(reset! lightbox-img (str "/uploads/" (:filename response)))}]
-                                  [:audio.response-image {:controls true :src (str "/uploads/" (:filename response))}])]]
-                              (if-let [caption (:caption response)] 
+                           [:div.six.columns
+                            [:label {:for "religion"} "Religion"] 
+                            (make-select-box :religion-id (:religions @data-lists))]
+                           [:div.six.columns
+                            [:label {:for "regions"} "Region"] 
+                            (make-select-box :region-id (:regions @data-lists))]]           
+                          [:div.row
+                           [:div.six.columns
+                            [:label {:for "skin-color"} "Skin color"] 
+                            (make-select-box :skin-color {:dark "Dark" :in-between "In Between" :light "Light"})]
+                           [:div.six.columns
+                            [:label {:for "regions"} "Education level"] 
+                            (make-select-box :education-level-id (:education-levels @data-lists))]]           
+                          [:div.row
+                           [:div.six.columns
+                            [:label {:for "politics-social"} "Politics on a social dimension"] 
+                            (make-select-box :politics-social {:liberal "Liberal" :moderate "Moderate" :conservative "Conservative"})]
+                           [:div.six.columns
+                            [:label {:for "regions"} "Politics on a political dimension"] 
+                            (make-select-box :politics-economics {:liberal "Liberal" :moderate "Moderate" :conservative "Conservative"})]]]
+                      form-data]
+                      [:div.row 
+                       [:div.six.columns
+                        [:button.button-primary {:on-click make-guess} "Make your guess"]]]
+                      [:div.row 
+                        [:p.error-message @quiz-error-message]]])
+                   [:div
+                     [:h4 "Questions"]
+                     (doall 
+                       (for [challenge showable-challenges]
+                         ^{:key (:challenge-instance-id challenge)} [:div.box.challenge 
+                          [:h5 [:em (:description challenge)]]
+                          [:div.row [:p (-> (js/moment (:starts-at challenge)) (.format "MMMM Do YYYY"))]]
+                          (when (and (not= (:status match) "over") (active? challenge)) 
+                            [:div.row [:p (str "This question ends " (format-from-now (:ends-at challenge)))]])
+                          (when (and (not (responded-to-challenge? challenge)) (active? challenge) (not= (:status match) "over"))
+                            [:div.row 
+                              [:button.button-primary {:on-click #(accountant/navigate! (str "/match/" match-id "/respond/" (:challenge-instance-id challenge)))} "Answer now"]])
+                          (if (empty? (:responses challenge))
+                            [:div.row
+                             [:p "No one has answered"]]
+                            (for [response (:responses challenge)]
+                              ^{:key (:challenge-response-id response)} 
+                              [:div.response-container
                                 [:div.row 
-                                  [:div.twelve.columns.caption caption]])]))]))
+                                 [:div.two.columns 
+                                  [:div.header (:user response)]]
+                                 [:div.ten.columns.centered 
+                                  (if (= "image" (:type challenge))
+                                    [:img.response-image {:src (str "/uploads/" (:filename response)) 
+                                                          :on-click #(reset! lightbox-img (str "/uploads/" (:filename response)))}]
+                                    [:audio.response-image {:controls true :src (str "/uploads/" (:filename response))}])]]
+                                (if-let [caption (:caption response)] 
+                                  [:div.row 
+                                    [:div.twelve.columns.caption caption]])]))]))]
                    [:div.row.section
                     (if (and (not= (:status match) "over") (not-empty upcoming-challenges)) 
                       [:h4 (str "Plus " (count upcoming-challenges) " more questions to come...")]
@@ -654,6 +685,7 @@
      (set! (.-onmessage connection) (fn [e]
                                 (prn "got notification from server" (.-data e))
                                 (let [notification (parse-notification e)]
+                                  (prn "parsed notification" notification)
                                   ; Add to notifications
                                   (go 
                                     (>! notification-chan notification))
