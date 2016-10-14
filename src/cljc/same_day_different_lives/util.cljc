@@ -14,6 +14,10 @@
   (for [row col] 
     (for [key keys] (get row key))))
 
+(defn throw-error [msg] 
+  #?(:clj  (Error. msg)
+     :cljs (js/Error. msg)))
+
 (defn describe-notification [notification]
   (condp = (:type notification)
     :new-response {:text "The other player has answered the question"
@@ -30,4 +34,4 @@
                   :link (str "/match/" (:match-id notification))}
     :created-match {:text "You have been paired up to make a new journal"
                     :link (str "/match/" (:match-id notification))}
-    (throw  (Error. (str "ERROR unknown notification type" (:type notification))))))
+    (throw-error (str "ERROR unknown notification type" (:type notification)))))
