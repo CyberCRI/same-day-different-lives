@@ -407,7 +407,35 @@
         match-model (atom nil)
         load-data (fn [] (get-match-model match-id match-model))
         lightbox-img (atom nil)
-        data-lists (atom nil)]
+        data-lists (atom nil)
+        submit-in-progress (atom false)
+        exchange-error-message (atom nil)
+        send-message (fn [e] 
+                       (.preventDefault e)
+                       (when-not @submit-in-progress
+                         (let [message (.-value (.getElementById js/document "message"))]
+                           (prn "Sending message" message)
+                           (go 
+                             (let [response (<! (http/post (str "/api/exchanges/" match-id) {:json-params {:message message}}))]
+                              (if (= :no-error (:error-code response))
+                                (do 
+                                  ; Clear message input box
+                                  (set! (.-value (.getElementById js/document "message")) "")
+                                  (load-data))
+                                (reset! exchange-error-message (:body response))))
+                              (reset! submit-in-progress false)))))
+        form-data (atom {})
+        quiz-error-message (atom nil)
+        response-in-progress (atom false)
+        make-guess (fn [] 
+                    (when-not @response-in-progress
+                      (reset! response-in-progress true)
+                      (go
+                        (let [response (<! (http/post (str "/api/quiz/" match-id) {:json-params @form-data}))]
+                          (if (= :no-error (:error-code response))
+                            (load-data)
+                            (reset! quiz-error-message (:body response)))
+                          (reset! response-in-progress false)))))]
     (load-data)
     (tap notification-mult local-notif-chan)
     (go-loop []
@@ -462,30 +490,14 @@
                       (if (empty? exchanges)
                         [:p [:em (if (= (:status match) "exchange") "You can say something to the other player" "No exchanges")]])
                       (when (= (:status match) "exchange")
-                        (let [submit-in-progress (atom false)
-                              exchange-error-message (atom nil)
-                              send-message (fn [e] 
-                                             (.preventDefault e)
-                                             (when-not @submit-in-progress
-                                               (let [message (.-value (.getElementById js/document "message"))]
-                                                 (prn "Sending message" message)
-                                                 (go 
-                                                   (let [response (<! (http/post (str "/api/exchanges/" match-id) {:json-params {:message message}}))]
-                                                    (if (= :no-error (:error-code response))
-                                                      (do 
-                                                        ; Clear message input box
-                                                        (set! (.-value (.getElementById js/document "message")) "")
-                                                        (load-data))
-                                                      (reset! exchange-error-message (:body response))))
-                                                    (reset! submit-in-progress false)))))]
-                          [:form {:on-submit send-message}
-                            [:div.row
-                             [:div.ten.columns
-                              [:input.u-full-width {:type :text :id :message :required true :placeholder "Write your message here..."}]]
-                             [:div.two.columns
-                              [:input.button-primary {:type :submit :value "Send"}]]
-                            [:div.row 
-                              [:p.error-message @exchange-error-message]]]]))
+                        [:form {:on-submit send-message}
+                          [:div.row
+                           [:div.ten.columns
+                            [:input.u-full-width {:type :text :id :message :required true :placeholder "Write your message here..."}]]
+                           [:div.two.columns
+                            [:input.button-primary {:type :submit :value "Send"}]]
+                          [:div.row 
+                            [:p.error-message @exchange-error-message]]]])
                       (doall 
                         (for [exchange exchanges]
                           ^{:key (:exchange-id exchange)} [:div.box.vertical-space
@@ -545,57 +557,45 @@
                        [:p
                         [:strong (str "You made " correct-answer-count " correct guesses out of 8")]]]])
                    (when (and (not own-quiz-response) (= (:status match) "quiz"))
-                     (let [form-data (atom {})
-                           error-message (atom nil)
-                           response-in-progress (atom false)
-                           make-guess (fn [] 
-                                        (when-not @response-in-progress
-                                          (reset! response-in-progress true)
-                                          (go
-                                            (let [response (<! (http/post (str "/api/quiz/" match-id) {:json-params @form-data}))]
-                                              (if (= :no-error (:error-code response))
-                                                (load-data)
-                                                (reset! error-message (:body response)))
-                                              (reset! response-in-progress false)))))]
-                       [:div 
-                        [:h4 "Quiz"]
-                        [:p "Try to guess the demographic information about your journal partner."]
-                        [bind-fields
-                         [:div
-                           [:div.row
-                             [:div.six.columns
-                              [:label {:for "gender"} "Gender"] 
-                              (make-select-box :gender {:male "Male" :female "Female" :other "Other"})]
-                             [:div.six.columns
-                              [:label {:for "birth-year"} "Year of birth"] 
-                              [:input.u-full-width {:field :numeric :type :number :id :birth-year :required true :min 1900 :max (.getFullYear (js/Date.))}]]]
-                            [:div.row
-                             [:div.six.columns
-                              [:label {:for "religion"} "Religion"] 
-                              (make-select-box :religion-id (:religions @data-lists))]
-                             [:div.six.columns
-                              [:label {:for "regions"} "Region"] 
-                              (make-select-box :region-id (:regions @data-lists))]]           
-                            [:div.row
-                             [:div.six.columns
-                              [:label {:for "skin-color"} "Skin color"] 
-                              (make-select-box :skin-color {:dark "Dark" :in-between "In Between" :light "Light"})]
-                             [:div.six.columns
-                              [:label {:for "regions"} "Education level"] 
-                              (make-select-box :education-level-id (:education-levels @data-lists))]]           
-                            [:div.row
-                             [:div.six.columns
-                              [:label {:for "politics-social"} "Politics on a social dimension"] 
-                              (make-select-box :politics-social {:liberal "Liberal" :moderate "Moderate" :conservative "Conservative"})]
-                             [:div.six.columns
-                              [:label {:for "regions"} "Politics on a political dimension"] 
-                              (make-select-box :politics-economics {:liberal "Liberal" :moderate "Moderate" :conservative "Conservative"})]]]
-                        form-data]
-                        [:div.row 
-                         [:div.six.columns
-                          [:button.button-primary {:on-click make-guess} "Make your guess"]]]
-                        [:div.row 
-                          [:p.error-message @error-message]]]))
+                     [:div 
+                      [:h4 "Quiz"]
+                      [:p "Try to guess the demographic information about your journal partner."]
+                      [bind-fields
+                       [:div
+                         [:div.row
+                           [:div.six.columns
+                            [:label {:for "gender"} "Gender"] 
+                            (make-select-box :gender {:male "Male" :female "Female" :other "Other"})]
+                           [:div.six.columns
+                            [:label {:for "birth-year"} "Year of birth"] 
+                            [:input.u-full-width {:field :numeric :type :number :id :birth-year :required true :min 1900 :max (.getFullYear (js/Date.))}]]]
+                          [:div.row
+                           [:div.six.columns
+                            [:label {:for "religion"} "Religion"] 
+                            (make-select-box :religion-id (:religions @data-lists))]
+                           [:div.six.columns
+                            [:label {:for "regions"} "Region"] 
+                            (make-select-box :region-id (:regions @data-lists))]]           
+                          [:div.row
+                           [:div.six.columns
+                            [:label {:for "skin-color"} "Skin color"] 
+                            (make-select-box :skin-color {:dark "Dark" :in-between "In Between" :light "Light"})]
+                           [:div.six.columns
+                            [:label {:for "regions"} "Education level"] 
+                            (make-select-box :education-level-id (:education-levels @data-lists))]]           
+                          [:div.row
+                           [:div.six.columns
+                            [:label {:for "politics-social"} "Politics on a social dimension"] 
+                            (make-select-box :politics-social {:liberal "Liberal" :moderate "Moderate" :conservative "Conservative"})]
+                           [:div.six.columns
+                            [:label {:for "regions"} "Politics on a political dimension"] 
+                            (make-select-box :politics-economics {:liberal "Liberal" :moderate "Moderate" :conservative "Conservative"})]]]
+                      form-data]
+                      [:div.row 
+                       [:div.six.columns
+                        [:button.button-primary {:on-click make-guess} "Make your guess"]]]
+                      [:div.row 
+                        [:p.error-message @quiz-error-message]]])
                    [:div
                      [:h4 "Questions"]
                      (doall 
