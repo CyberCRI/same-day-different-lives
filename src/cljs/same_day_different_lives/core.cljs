@@ -376,7 +376,7 @@
                   [:label {:for "politics-social"} "Politics on a social dimension"] 
                   (make-select-box :politics-social {:liberal "Liberal" :moderate "Moderate" :conservative "Conservative"})]
                  [:div.six.columns
-                  [:label {:for "regions"} "Politics on a political dimension"] 
+                  [:label {:for "regions"} "Politics on a economic dimension"] 
                   (make-select-box :politics-economics {:liberal "Liberal" :moderate "Moderate" :conservative "Conservative"})]]]
               fields]
              [:p 
