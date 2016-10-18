@@ -14,7 +14,19 @@ INSERT INTO challenges (type, description) VALUES
 	('audio', 'What is worrying you the most right now?'),
 	('image', 'Take a photo of something that makes you happy'),
 	('audio', 'Tell about something that has changed a lot recently'),
-	('audio', 'What was the scariest moment of your life?')
+	('audio', 'Tell about something that scared you a lot'),
+	('image', 'Take a picture of the tiniest object you see right now.'),
+	('audio', 'What''s the heaviest thing you lifted today?'),
+	('audio', 'What''s the best thing that''s happened to you this week?'),
+	('audio', 'Tell us a story about something you lost.'),
+	('image', 'Take a picture out your front door.'),
+	('image', 'Take a picture of something you''re throwing away today'),
+	('audio', 'Tell us about a recent dream you had'),
+	('audio', 'Tell us about something you want right now'),
+	('audio', 'Tell us something interesting you overheard recently'),
+	('image', 'Take a picture of your mode of transport today'),
+	('image', 'Take a picture of something you are carrying around in your pocket'),
+	('image', 'Take a picture of your feet')
 ;
 
 DROP TYPE IF EXISTS user_status CASCADE;
