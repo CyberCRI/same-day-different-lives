@@ -5,7 +5,7 @@
             [same-day-different-lives.middleware :refer [wrap-middleware]]
             [same-day-different-lives.util :as util]
             [same-day-different-lives.config :refer [config]]
-            [same-day-different-lives.conversion :refer [convert-file]]
+            [same-day-different-lives.conversion :as conversion]
             [same-day-different-lives.notification :as notification]
             [same-day-different-lives.model :as model]
             [ring.middleware.params :refer [wrap-params]]
@@ -69,14 +69,22 @@
   (let [{:keys [tempfile content-type]} file-params
         [file-category original-extension] (string/split content-type (re-pattern "/"))]
     (prn "For challenge of type " challenge-type ", received file of type" file-category "with extension" original-extension)
-    (if (and (= challenge-type "audio") (not= original-extension "mp3"))
-      ; Convert to MP3
+    (cond 
+      ; If non-mp3 audio, convert to mp3
+      (and (= challenge-type "audio") (not= original-extension "mp3"))
       (let [new-filename (str (temp-name 20) ".mp3")]
         (prn "Converting to MP3.")
         ; TODO: check for failure
-        (convert-file (.getPath tempfile) (str "uploads/" new-filename))
+        (conversion/convert-audio-video (.getPath tempfile) (str "uploads/" new-filename))
         { :filename new-filename :mime-type "audio/mp3"})
-      ; No need to convert
+      ; If photo, fix rotation
+      (= challenge-type "image")
+      (let [new-filename (str (temp-name 20) ".jpg")]
+        (prn "Fixing image rotation.")
+        (conversion/convert-photo (.getPath tempfile) (str "uploads/" new-filename))
+        { :filename new-filename :mime-type "image/jpeg"})
+      ; Otherwise, no need to convert
+      :else
       (let [new-filename (str (temp-name 20) "." original-extension)]
         (prn "Copying as-is.")
         (io/copy tempfile (io/file (str "uploads/" new-filename)))
