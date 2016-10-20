@@ -7,6 +7,7 @@
 * Java
 * PostgreSQL
 * FFMPEG (`brew install ffmpeg` on OSX)
+* ImageMagick (`brew install imagemagick` on OSX)
 
 
 ### Create a user and database in PostgreSQL
@@ -19,6 +20,7 @@ sudo adduser same-day-different-lives
 sudo -u postgres createuser -P same-day-different-lives
 sudo -u postgres createdb --owner same-day-different-lives same-day-different-lives
 ```
+
 
 ### Initialize the database
 
