@@ -1,6 +1,6 @@
 (ns same-day-different-lives.notification
   (:require [org.httpkit.server :as httpkit]
-            [clojure.core.async :refer [go go-loop <! >! chan sliding-buffer put!]]
+            [clojure.core.async :refer [go go-loop <! >! >!! chan sliding-buffer]]
             [clojure.data.json :as json]
             [same-day-different-lives.config :refer [config]]
             [same-day-different-lives.util :as util]
@@ -85,11 +85,12 @@
       (send-by-ws! user-id notification))
     (do 
       (prn "Sending by mail")
-      (put! email-chan [user-id notification]))))
+      (>!! email-chan [user-id notification]))))
 
 
 (defn run-emailer [] 
   (prn "emailer started") 
   (go-loop []
     (let [[user-id notification] (<! email-chan)]
-     (send-by-email! user-id notification))))
+     (send-by-email! user-id notification)
+     (recur))))
