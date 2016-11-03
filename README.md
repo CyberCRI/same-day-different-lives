@@ -1,5 +1,12 @@
 # Same Day Different Lives
 
+Meet people in reverse. A prototype for the [IncLudo project on diversity](http://includo.in). 
+
+Try it online at http://sddl.crigamelab.org/
+
+Programmed in Clojure and ClojureScript.
+
+
 ## Installation 
 
 ### Install requirements
