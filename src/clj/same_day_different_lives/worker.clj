@@ -25,7 +25,6 @@
 
 (defn pair-users []
   "Makes pairs of users"
-  ; TODO try to find people who haven't been together
   ; TODO try to find people who are demographically different
   ; For now, just pair the users randomly
   (let [users (jdbc/query db ["select user_id from users
@@ -36,29 +35,33 @@
                                {:row-fn :challenge_id})
         selected-challenges (take 5 (shuffle challenges))]
     (doseq [[user-a user-b] user-pairs]
-      (prn "making match for users" user-a user-b "challenges" selected-challenges)
-      ; Make match
-      (let [[{match-id :match_id}] 
-            ; 5 challenges, 1 quiz, 1 exchange 
-            (jdbc/insert! db :matches { :user_a user-a :user_b user-b
-                                        :starts_at (t/now)
-                                        :quiz_at (t/plus (t/now) (t/days 5)) 
-                                        :exchange_at (t/plus (t/now) (t/days 6)) 
-                                        :ends_at (t/plus (t/now) (t/days 7)) })]
-        ; Setup challenges
-        (doseq-indexed [challenge selected-challenges offset]
-          (jdbc/insert! db :challenge_instances {:challenge_id challenge :match_id match-id
-                                                 :starts_at (t/plus (t/now) (t/days offset))
-                                                 :ends_at (t/plus (t/now) (t/days (inc offset)))}))
+      (if (model/already-matched? user-a user-b)
+        ; Since the pairing is random, these users should find a match with others on subsequent calls to this function
+        (prn "Skipping match making for users " user-a user-b)
+        (do 
+          (prn "making match for users" user-a user-b "challenges" selected-challenges)
+          ; Make match
+          (let [[{match-id :match_id}] 
+                ; 5 challenges, 1 quiz, 1 exchange 
+                (jdbc/insert! db :matches { :user_a user-a :user_b user-b
+                                            :starts_at (t/now)
+                                            :quiz_at (t/plus (t/now) (t/days 5)) 
+                                            :exchange_at (t/plus (t/now) (t/days 6)) 
+                                            :ends_at (t/plus (t/now) (t/days 7)) })]
+            ; Setup challenges
+            (doseq-indexed [challenge selected-challenges offset]
+              (jdbc/insert! db :challenge_instances {:challenge_id challenge :match_id match-id
+                                                     :starts_at (t/plus (t/now) (t/days offset))
+                                                     :ends_at (t/plus (t/now) (t/days (inc offset)))}))
 
-        ; Send notifications
-        (doseq [user-id [user-a user-b]]
-          (notification/send! user-id 
-                              {:type :created-match 
-                               :match-id match-id})))
+            ; Send notifications
+            (doseq [user-id [user-a user-b]]
+              (notification/send! user-id 
+                                  {:type :created-match 
+                                   :match-id match-id})))
 
-      ; Change user statuses
-      (jdbc/update! db :users { :status "playing" } ["user_id in (?, ?)" user-a user-b]))))
+          ; Change user statuses
+          (jdbc/update! db :users { :status "playing" } ["user_id in (?, ?)" user-a user-b]))))))
 
 (defn move-matches-to-quiz-mode [] 
   "Look for matches that should enter the quiz mode, and change the status"

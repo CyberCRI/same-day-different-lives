@@ -107,3 +107,15 @@
 
 (defn submit-exchange [values-map] 
   (jdbc/insert! db :exchanges (transform-keys-to-db-keywords values-map)))
+
+(defn already-matched? [user-a user-b]
+  "Returns true if the two users have already played a match together"
+  (-> (jdbc/query db
+                  ["select exists(
+                      select match_id 
+                      from matches 
+                      where user_a = ? and user_b = ?
+                        or user_a = ? and user_b = ?)" 
+                   user-a user-b user-b user-a])
+      first
+      :exists))
