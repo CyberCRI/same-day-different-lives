@@ -356,6 +356,10 @@
                                :match-id match-id}))
         (response {})))))
 
+(defn obtain-stats [request] 
+  (response {:users (model/count-users)
+             :matches (model/count-matches)}))
+
 
 ;;; ROUTES
 
@@ -366,6 +370,8 @@
 (defroutes api-routes 
   (GET "/ws" [] (-> notification/ws-handler wrap-require-user))
   
+  (GET "/api/stats" [] (-> obtain-stats wrap-json-body wrap-json-response))
+
   (POST "/api/users" [] (-> create-user wrap-keywordize wrap-json-body wrap-json-response))
 
   (GET "/api/me" [] (-> get-user-info wrap-keywordize wrap-require-user wrap-json-body wrap-json-response))

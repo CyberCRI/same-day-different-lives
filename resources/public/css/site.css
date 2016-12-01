@@ -119,3 +119,8 @@ input.caption {
   margin-top: 10px;
   margin-bottom: 10px;
 }
+
+.statistics {
+  font-size: small;
+  margin-top: 20px;
+}

@@ -76,7 +76,15 @@
   (GET (str "/api/challenge-instance/" challenge-instance-id) 
     {:handler (fn [challenge-instance] (reset! challenge-instance-model (keywordize-keys challenge-instance)))
      :error-handler (fn [response] (reset! challenge-instance-model {:error (get-in (keywordize-keys response) [:response :error])}))}))
- 
+
+(defn get-stats []
+  "Returns a promise chan on which it will put /api/stats"
+  (let [promise (chan 1)
+        stats-chan (http/get "/api/stats")]
+    (go 
+      (>! promise (:body (<! stats-chan))))
+    promise))
+
 (defn find-first-other [col value]
  ; Returns the first item in col that is not equal to val
  (first (filter #(not= % value) col))) 
@@ -203,9 +211,12 @@
   (let [local-notif-chan (chan)
         match-model (atom nil)
         all-matches-model (atom nil)
+        stats-model (atom nil)
         load-data (fn [] 
                     (get-active-match match-model)
                     (get-matches all-matches-model))]
+    (go
+      (reset! stats-model (<! (get-stats))))
     (load-data)
     (tap notification-mult local-notif-chan)
     (go-loop []
@@ -219,7 +230,7 @@
        :reagent-render
         (fn [] 
           [:div
-           [header-with-login] 
+           [header-with-login]
            (when @user-model 
             (case (:status @user-model) 
               "dormant" [:div 
@@ -244,7 +255,14 @@
                  ^{:key match-id} [:div.row 
                   [:div.six.columns (str "Started " (-> (js/moment (str starts_at)) (.format "MMMM Do YYYY")))]
                   [:div.six.columns 
-                   [:a {:href (str "/match/" match-id)} (str "Journal with " other-pseudo)]]]))]))])})))
+                   [:a {:href (str "/match/" match-id)} (str "Journal with " other-pseudo)]]]))]))
+           (when @stats-model 
+             (let [{users :users {:keys [challenge quiz exchange over total]} :matches} @stats-model
+                   active-matches (- total over)]
+               [:p.statistics (str "Statistics: there are " users " users and " total " journals, of which " active-matches " are ongoing and " over " are over. " 
+                                    "Right now " challenge " pairs of players are answering questions, "
+                                    quiz " are doing a quiz, and " exchange " are exchanging directly.")])) 
+])})))
 
 (defn login-page [] 
   (let [fields (atom {})

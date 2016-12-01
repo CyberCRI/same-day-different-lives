@@ -119,3 +119,23 @@
                    user-a user-b user-b user-a])
       first
       :exists))
+
+(defn count-users [] 
+  "Returns the number of registered users"
+  (-> (jdbc/query db
+                  ["select count(*) 
+                    from users"])
+      first
+      :count))
+
+(defn count-matches [] 
+  "Returns the number of matches in each stage"
+  (let [initial-counts {:challenge 0 :quiz 0 :exchange 0 :over 0}
+        results (jdbc/query db
+                             ["select status, count(*) 
+                               from matches
+                               group by status"])
+        step-counts (reduce #(assoc %1 (keyword (:status %2)) (:count %2)) initial-counts results)
+        total (apply + (vals step-counts))]
+    ; Assign total to map and return
+    (assoc step-counts :total total)))
